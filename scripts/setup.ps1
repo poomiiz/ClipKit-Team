@@ -1,6 +1,7 @@
 # ClipKit Team: one-time machine setup (Windows). Safe to re-run.
 #   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1 -Workspace D:\ClipKit
-param([Parameter(Mandatory = $true)][string]$Workspace)
+#   (clipkit repair runs it again with the workspace already in config.json)
+param([string]$Workspace = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -27,6 +28,17 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
     python -m pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*"
 }
 
+if (-not $Workspace -and (Test-Path "$root\config.json")) {
+    $Workspace = (Get-Content "$root\config.json" -Raw | ConvertFrom-Json).workspace
+}
+if (-not $Workspace) { throw "say where ClipKit keeps its files, e.g.  -Workspace D:\ClipKit" }
 python "$root\scripts\setup_workspace.py" $Workspace
+
+# the clipkit command (doctor / update / repair) from any terminal
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if (-not ($userPath -split ";" | Where-Object { $_ -eq $root })) {
+    [Environment]::SetEnvironmentVariable("Path", "$userPath;$root", "User")
+    Write-Host "Added $root to PATH: open a new terminal to use the clipkit command."
+}
 python "$root\scripts\fetch_model.py"
 python "$root\scripts\doctor.py"

@@ -105,8 +105,34 @@ def asr():
     return "Whisper loaded and ran"
 
 
+def capcut():
+    import os
+    apps = Path(os.environ.get("LOCALAPPDATA", "")) / "CapCut" / "Apps"
+    if not apps.is_dir():
+        raise RuntimeError("CapCut for PC not installed (capcut.com) - needed for --capcut projects")
+    import kitconfig
+    d = kitconfig.CFG.get("capcut_drafts")
+    if not d or not Path(d).is_dir():
+        raise RuntimeError("CapCut drafts folder not set: open CapCut once, then run  clipkit repair")
+    return "drafts: " + d
+
+
+def fonts():
+    f = ROOT / "fonts" / "Kanit-Bold.ttf"
+    if not f.is_file():
+        raise RuntimeError("fonts/Kanit-Bold.ttf missing - run  clipkit update")
+
+
+def skill():
+    missing = [p for p in ("skills/make-clip/SKILL.md", "AGENTS.md", "presets/default.json") if not (ROOT / p).is_file()]
+    if missing:
+        raise RuntimeError("missing: " + ", ".join(missing) + " - run  clipkit update")
+    return "open Claude Code / Codex in " + str(ROOT)
+
+
 for n, f in [("python", py), ("python packages", modules), ("ffmpeg", tools), ("node", node), ("config + folders", config),
-             ("GPU", gpu), ("speech model", model), ("disk space", disk)]:
+             ("GPU", gpu), ("speech model", model), ("disk space", disk),
+             ("CapCut", capcut), ("fonts", fonts), ("AI skill", skill)]:
     check(n, f)
 # fonts are each editor's own choice; only the preview render needs "card_font" installed
 check("preview font", font, optional=True)
@@ -114,6 +140,11 @@ if "--asr" in sys.argv:
     check("speech-to-text", asr)
 
 sys.stdout.reconfigure(encoding="utf-8")
+print("ClipKit Team")
 for ok, name, detail in results:
     print(f"{'WARN' if ok == 'WARN' else 'OK  ' if ok else 'FAIL'} {name:18} {detail}")
-sys.exit(0 if all(r[0] for r in results) else 1)
+ready = all(r[0] for r in results)
+print("
+READY" if ready else "
+NOT READY - fix the FAIL lines (most are fixed by:  clipkit repair)")
+sys.exit(0 if ready else 1)
