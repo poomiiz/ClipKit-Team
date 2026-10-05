@@ -188,14 +188,14 @@ def main() -> int:
                 say(step="ส่งออก MP4", story=n)
                 row["mp4"] = ve.draft_hf_export(ve.ExportRequest(path=path))["file"]
             rows.append(row)
-            cutlog.log_run(raw, st, n, path, {k: v for k, v in vars(a).items() if k != "video"}, row["length"])
+            row["check"] = cutlog.log_run(raw, st, n, path, {k: v for k, v in vars(a).items() if k != "video"}, row["length"])
         except (video_edit.VideoEditError, HTTPException) as exc:
             say(error=detail(exc), story=n, title=st["title"])
             return 1
     if waits:
         say(WAIT=waits, then=" ".join(sys.argv))
         return 2
-    say(done=str(page(raw, rows)), clips=[{k: r[k] for k in ("n", "title", "length", "path") if k in r} | {"mp4": r.get("mp4"), "capcut": r.get("capcut"), "capcut_warnings": r.get("capcut_warnings")}
+    say(done=str(page(raw, rows)), clips=[{k: r[k] for k in ("n", "title", "length", "path") if k in r} | {"mp4": r.get("mp4"), "capcut": r.get("capcut"), "capcut_warnings": r.get("capcut_warnings"), "check": r.get("check")}
                                          for r in rows], stories=len(sts), pilot=not a.all)
     return 0
 
