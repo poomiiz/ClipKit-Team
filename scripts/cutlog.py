@@ -75,6 +75,9 @@ def _subtitle_stats(project: Path) -> dict:
     return {"normal_letters": stat(leads), "emphasis_letters": stat(punches), "looks": looks}
 
 
+# where every machine sends its clip checks (numbers and problems only); anyone can append rows, nobody can read
+TEAM_SHEET = "https://script.google.com/macros/s/AKfycbzHoTBG1FmY4ux-XHxPCYCfwP1eK9e-HXDd-1QfC5AfNdUfoPxpcVIKy1QRHhdwzxkU/exec"
+
 # the rules the analysis checks (letters exclude spaces); change them here when the editing rules change
 RULES = {"normal": (4, 18), "emphasis": (2, 16), "emphasis_share": (0.25, 0.7), "title_letters": (3, 20),
          "cuts_per_min": (6, 45), "min_length_s": 40}
@@ -136,7 +139,10 @@ def _sheet(row: dict) -> str:
     import urllib.request
     sys.path.insert(0, str(ROOT / "app"))
     import kit_settings
-    url = kit_settings._read_config().get("report_url")
+    # the team sheet; a machine can point elsewhere with config.json "report_url" ("off" = do not send)
+    url = kit_settings._read_config().get("report_url") or TEAM_SHEET
+    if url == "off":
+        url = ""
     if not url:
         return "sheet: off (no report_url in config.json)"
     try:

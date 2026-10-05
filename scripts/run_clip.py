@@ -38,6 +38,38 @@ def _parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__" and {"-h", "--help"} & set(sys.argv):
     _parser().parse_args()  # help works before config.json exists
+
+
+def _self_update() -> None:
+    """Team machines (a clone of ClipKit-Team) take the newest version before every run, so nobody has to type
+    clipkit update. Offline, or local edits in the way: say so and run the version already here."""
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    git = lambda *a: subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True, timeout=60)  # noqa: E731
+    try:
+        if "ClipKit-Team" not in git("remote", "get-url", "origin").stdout or os.environ.get("CLIPKIT_UPDATED"):
+            return
+        if git("fetch", "-q").returncode != 0:
+            print('{"update": "skipped: no connection to GitHub"}', flush=True)
+            return
+        if git("rev-parse", "HEAD").stdout == git("rev-parse", "@{u}").stdout:
+            return
+        changed = git("diff", "--name-only", "HEAD", "@{u}").stdout.split()
+        if git("pull", "-q", "--ff-only").returncode != 0:
+            print('{"update": "skipped: files in the ClipKit folder were changed by hand - run clipkit repair"}', flush=True)
+            return
+        if "requirements.txt" in changed:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(root / "requirements.txt")])
+        print('{"update": "updated to the newest ClipKit - restarting"}', flush=True)
+        os.environ["CLIPKIT_UPDATED"] = "1"
+        sys.exit(subprocess.run([sys.executable, *sys.argv]).returncode)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print('{"update": "skipped: ' + str(exc).replace('"', "'") + '"}', flush=True)
+
+
+if __name__ == "__main__":
+    _self_update()
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 import capcut_edit  # noqa: E402
