@@ -1,0 +1,20 @@
+{
+  "_note": "New machine: run  python scripts/setup_workspace.py D:/ClipKit  (or pick the workspace in ClipKit Settings); it creates config.json with these paths. Scripts read config.json; never hard-code paths in a skill.",
+  "work_root": "",
+  "capcut_drafts": "",
+  "stock_video": "",
+  "stock_music": "",
+  "sfx": "",
+  "output_dir": "",
+  "models_dir": "",
+  "_models_dir_note": "speech model (about 3 GB); empty = the default cache on C:, Settings sets it to <workspace>/models",
+  "card_font": "",
+  "_card_font_note": "optional: any installed font, only used for quick preview renders; editors pick their own fonts in CapCut",
+  "whisper_model": "large-v3",
+  "whisper_device": "cuda",
+  "stock_source": "free",
+  "pixabay_key": "",
+  "envato_backend": "local",
+  "_envato_backend_note": "local = this machine's Chrome via scripts/envato.py (run: python scripts/envato.py login once); bot = team bot on the bot host",
+  "bot_api_url": "http://127.0.0.1:8765"
+}

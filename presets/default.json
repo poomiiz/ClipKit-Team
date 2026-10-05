@@ -1,0 +1,6 @@
+{
+ "about": "White normal line + bigger orange emphasis line. Copy this file to make your own preset.",
+ "normal":   {"size": 22, "y": -0.33, "color": "#ffffff", "outline": "#000000", "outline_width": 0.04},
+ "emphasis": {"size": 26, "y": -0.46, "color": "#ff7d00", "outline": "#000000", "outline_width": 0.06},
+ "caption": null
+}

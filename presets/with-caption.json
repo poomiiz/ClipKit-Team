@@ -1,0 +1,6 @@
+{
+ "about": "Like default, plus one small translated caption per spoken line at the bottom.",
+ "normal":   {"size": 22, "y": -0.29, "color": "#ffffff", "outline": "#000000", "outline_width": 0.05},
+ "emphasis": {"size": 26, "y": -0.44, "color": "#ff7d00", "outline": "#000000", "outline_width": 0.06},
+ "caption":  {"size": 8, "y": -0.80, "color": "#ffffff", "outline": "#000000", "outline_width": 0.08, "language": "en"}
+}

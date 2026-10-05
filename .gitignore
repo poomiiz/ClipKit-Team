@@ -1,0 +1,8 @@
+﻿config.json
+__pycache__/
+*.pyc
+config.json.bak*
+preview-bg*
+
+bug_reports/
+app/sfx_builtin/

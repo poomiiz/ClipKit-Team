@@ -1,0 +1,7 @@
+faster-whisper>=1.0
+pythainlp>=5.0
+soundfile>=0.12
+playwright>=1.45
+fastapi>=0.110
+uvicorn>=0.29
+opencv-python>=4.8
