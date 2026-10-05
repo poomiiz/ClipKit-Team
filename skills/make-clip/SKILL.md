@@ -83,7 +83,8 @@ For the sentence-pair subtitles (normal lead line + bigger emphasis punch line, 
    short and natural ("If I want to start my own business from scratch, let's say..."). Brand names stay.
 
 ## Cut log (always)
-Every finished clip is logged by `run_clip.py` (`<output>/logs/runs.jsonl`). When the person complains about a
+Every finished clip is logged by `run_clip.py` (`<output>/logs/runs.jsonl`). Its output has a `check` per clip (score + problems
+against the rules): fix every problem it lists (re-pick emphasis / title) and run again before showing the person. When the person complains about a
 result ("ซับยาวไป", "ซับสั้นเกิน", "เรียงเนื้อหาไม่ดี", "หัวคลิปไม่ตรง"...), BEFORE you change anything run
 `python scripts/cutlog.py feedback "<project folder>" "<what they said, their words>"`, then fix, then run it again
 with `--fix "<what you changed>"`. Asked to send results back: `clipkit report` (or `python scripts/cutlog.py report`)
