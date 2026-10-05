@@ -13,14 +13,13 @@ ClipKit ตัดวิดีโอพูดหน้ากล้องให้
 - **git**: ลงจาก [git-scm.com](https://git-scm.com/download/win) กด Next ไปจนจบ
 - **Claude Code** หรือ **Codex** (AI ที่สั่งงาน) ของตัวเอง
 - **CapCut สำหรับ PC** ถ้าจะทำเป็นโปรเจกต์ CapCut (เปิดโปรแกรม 1 ครั้งก่อนติดตั้ง ClipKit)
-- ข้อความติดตั้งจากหัวหน้า (มีลิงก์และกุญแจของทีม) **ห้ามส่งต่อคนนอกทีม**
 
 ## 2. ติดตั้ง (ทำครั้งเดียว)
 
-เปิด **PowerShell** (กดปุ่ม Windows พิมพ์ `PowerShell` แล้ว Enter) แล้ววางทีละบรรทัดจากข้อความของหัวหน้า:
+เปิด **PowerShell** (กดปุ่ม Windows พิมพ์ `PowerShell` แล้ว Enter) แล้ววางทีละบรรทัด:
 
 ```
-git clone https://<กุญแจ>@github.com/poomiiz/ClipKit-Team ClipKit
+git clone https://github.com/poomiiz/ClipKit-Team ClipKit
 cd ClipKit
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1 -Workspace D:\ClipKit
 ```
@@ -81,7 +80,6 @@ powershell -ExecutionPolicy Bypass -File scripts\setup.ps1 -Workspace D:\ClipKit
 | ติดตั้งแล้วไม่ขึ้น READY | พิมพ์ `clipkit repair` |
 | พิมพ์ `clipkit` แล้วไม่รู้จัก | ปิด PowerShell แล้วเปิดใหม่ (ครั้งแรกหลังติดตั้ง) |
 | `git` ไม่รู้จัก | ลง git จาก git-scm.com แล้วเปิด PowerShell ใหม่ |
-| clone แล้วขึ้น `not found` / `Authentication failed` | กุญแจหมดอายุหรือพิมพ์ผิด ขอข้อความใหม่จากหัวหน้า |
 | โปรเจกต์ CapCut ไม่ขึ้นใน CapCut | ปิด CapCut แล้วเปิดใหม่ |
 | AI บอกว่าขาดฟอนต์ / เอฟเฟกต์ผิวเนียน | ใส่เองใน CapCut ครั้งแรก ครั้งต่อไปจะมีให้ |
 | อย่างอื่น | พิมพ์ `clipkit doctor` แคปจอส่งหัวหน้า |
