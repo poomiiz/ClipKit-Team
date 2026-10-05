@@ -1120,6 +1120,114 @@ def draft_line_time(req: LineTime) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+class HookLine(BaseModel):
+    text: str
+    color: str = Field(pattern="^(white|orange|red)$")
+
+
+class HookEdit(BaseModel):
+    path: str
+    lines: list[HookLine] = Field(max_length=2)   # none = no title
+
+
+@router.post("/draft/hook")
+def draft_hook(req: HookEdit) -> dict[str, Any]:
+    """The clip title (first 4 s), edited in the editor: 1-2 lines, each white / orange / red."""
+    import render
+    f = Path(req.path) / "clipkit_hook.json"
+    lines = [{"text": x.text.strip(), "color": x.color} for x in req.lines if x.text.strip()]
+    if not lines:
+        f.unlink(missing_ok=True)
+        return {"hook": []}
+    old = f.read_text(encoding="utf-8") if f.is_file() else None
+    f.write_text(json.dumps(lines, ensure_ascii=False), encoding="utf-8")
+    try:
+        return {"hook": render._hook(Path(req.path))}
+    except VideoEditError as exc:
+        if old is None:
+            f.unlink()
+        else:
+            f.write_text(old, encoding="utf-8")
+        raise HTTPException(400, str(exc)) from exc
+
+
+class CaptionEdit(BaseModel):
+    path: str
+    line: str
+    text: str
+
+
+@router.post("/draft/caption")
+def draft_caption(req: CaptionEdit) -> dict[str, Any]:
+    """The small translated caption of one spoken line (empty = none for that line)."""
+    f = Path(req.path) / "clipkit_caption.json"
+    data = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    if req.text.strip():
+        data[req.line] = req.text.strip()
+    else:
+        data.pop(req.line, None)
+    f.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"lines": len(data)}
+
+
+class CutRange(BaseModel):
+    path: str
+    start: float = Field(ge=0)
+    end: float
+
+
+UNDO_FILES = ("draft_content.json", "clipkit_words.json", "clipkit_placed.json")
+
+
+@router.post("/draft/cut")
+def draft_cut(req: CutRange) -> dict[str, Any]:
+    """Cut a stretch of the talk out of the clip (subtitles inside it go too, later ones move up); undoable."""
+    import shutil
+    import time
+    if req.end - req.start < 0.1:
+        raise HTTPException(400, "ช่วงที่จะตัดสั้นเกินไป")
+    folder = Path(req.path)
+    undo = folder / "clipkit_undo" / (time.strftime("%Y%m%d-%H%M%S") + f"-{int(time.time() * 1000) % 1000:03d}")
+    undo.mkdir(parents=True)
+    for name in UNDO_FILES:
+        if (folder / name).is_file():
+            shutil.copy2(folder / name, undo / name)
+    try:
+        r = capcut_edit.trim_pauses(req.path, ranges=[(req.start, req.end)])
+    except VideoEditError as exc:
+        shutil.rmtree(undo)
+        raise HTTPException(400, str(exc)) from exc
+    gone = req.end - req.start
+    placed = folder / "clipkit_placed.json"
+    if placed.is_file():  # b-roll after the cut moves up with the talk; b-roll inside it goes with it
+        pl = json.loads(placed.read_text(encoding="utf-8"))
+        keep = []
+        for b in pl.get("broll", []):
+            if b["start"] >= req.end:
+                b["start"] = round(b["start"] - gone, 2)
+                keep.append(b)
+            elif b["start"] + b["dur"] <= req.start:
+                keep.append(b)
+        pl["broll"] = keep
+        placed.write_text(json.dumps(pl, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"length": r.get("result_length"), "undo": len(list((folder / "clipkit_undo").iterdir()))}
+
+
+@router.post("/draft/uncut")
+def draft_uncut(req: DraftPath) -> dict[str, Any]:
+    """Undo the last cut made in the editor."""
+    import shutil
+    box = Path(req.path) / "clipkit_undo"
+    steps = sorted(box.iterdir()) if box.is_dir() else []
+    if not steps:
+        raise HTTPException(400, "ไม่มีการตัดให้ย้อนแล้ว")
+    for name in UNDO_FILES:
+        if (steps[-1] / name).is_file():
+            shutil.copy2(steps[-1] / name, Path(req.path) / name)
+    shutil.rmtree(steps[-1])
+    return {"undo": len(steps) - 1}
+
+
 def auto_cover(path: str) -> str:
     """A cover from the story title on the frame where the speaker's face is biggest; kept in clipkit_style.json."""
     import re

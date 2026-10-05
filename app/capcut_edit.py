@@ -378,9 +378,10 @@ WORD_PAD = 0.10  # silence left before and after a word at a cut
 
 
 def trim_pauses(path: str, keep: float = 0.25, min_gain: float = 0.30,
-                apply: bool = True) -> dict[str, Any]:
+                apply: bool = True, ranges: list[tuple[float, float]] | None = None) -> dict[str, Any]:
     """Find the pauses left in a draft's timeline and cut them out, sliding the
-    subtitles along so they stay on the words."""
+    subtitles along so they stay on the words. ranges = cut exactly these timeline spans instead (the editor's
+    "cut this out"); a subtitle wholly inside one goes with it."""
     folder = Path(path)
     draft = _load(folder)
     video = _video_track(draft)
@@ -396,7 +397,11 @@ def trim_pauses(path: str, keep: float = 0.25, min_gain: float = 0.30,
     # noise), ~0.1 s left each side. Tuned on café footage: 41 cuts / 20 s out of 118 s with every word
     # still there on re-transcription - a hand edit of the same talk has 40.
     cursor = 0.0
-    for segment in video["segments"]:
+    for a, b in ranges or []:
+        a, b = max(0.0, a), min(total, b)
+        if b - a > 0.05:
+            cuts.append({"start": round(a, 3), "end": round(b, 3), "gain": round(b - a, 3)})
+    for segment in ([] if ranges else video["segments"]):
         start = segment["source_timerange"]["start"] / US
         length = segment["source_timerange"]["duration"] / US
         for q in quiet_spans(source, start, start + length):
@@ -466,6 +471,10 @@ def trim_pauses(path: str, keep: float = 0.25, min_gain: float = 0.30,
                 gone += t - cut["start"]
         return t - gone
 
+    if text and ranges:  # a subtitle wholly inside a cut-out span is cut out with it
+        text["segments"] = [s for s in text["segments"] if not any(
+            c["start"] - 0.05 <= s["target_timerange"]["start"] / US and
+            (s["target_timerange"]["start"] + s["target_timerange"]["duration"]) / US <= c["end"] + 0.05 for c in cuts)]
     if text:
         for segment in text["segments"]:
             span = segment["target_timerange"]
