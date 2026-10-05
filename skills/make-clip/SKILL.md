@@ -82,6 +82,13 @@ For the sentence-pair subtitles (normal lead line + bigger emphasis punch line, 
    as `{"<line text>": "<translation>"}` for every line, in the preset's caption `language` (default English) -
    short and natural ("If I want to start my own business from scratch, let's say..."). Brand names stay.
 
+## Cut log (always)
+Every finished clip is logged by `run_clip.py` (`<output>/logs/runs.jsonl`). When the person complains about a
+result ("ซับยาวไป", "ซับสั้นเกิน", "เรียงเนื้อหาไม่ดี", "หัวคลิปไม่ตรง"...), BEFORE you change anything run
+`python scripts/cutlog.py feedback "<project folder>" "<what they said, their words>"`, then fix, then run it again
+with `--fix "<what you changed>"`. Asked to send results back: `clipkit report` (or `python scripts/cutlog.py report`)
+makes a small zip with no video - tell them it contains the clip's spoken words.
+
 ## Subtitle presets (each person makes their own)
 `presets/<name>.json`: how the normal text and the emphasis text look, plus an optional small translated
 caption. Ask the person for a name.
