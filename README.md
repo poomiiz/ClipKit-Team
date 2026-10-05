@@ -1,6 +1,6 @@
 # ClipKit Team
 
-**คู่มือภาษาไทยพร้อมรูป: [GUIDE.md](GUIDE.md)**
+**คู่มือภาษาไทยพร้อมรูป: [GUIDE.md](GUIDE.md) · ดาวน์โหลด [PDF](docs/ClipKit_Manual_Guide.pdf) / [HTML](docs/ClipKit_Manual_Guide.html)**
 
 Talking-head video in, finished vertical short clips out: Thai subtitles in your own preset, a title, breaths cut,
 b-roll, music, an MP4 and/or a CapCut project to keep editing. You talk to your AI agent (Claude Code or Codex);
