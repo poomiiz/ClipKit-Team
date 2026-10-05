@@ -44,6 +44,7 @@ import capcut_edit  # noqa: E402
 import hf_build  # noqa: E402
 import kit_settings  # noqa: E402
 import render  # noqa: E402
+import cutlog  # noqa: E402  (scripts/cutlog.py: the cut log)
 import video_edit  # noqa: E402
 import video_editor as ve  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
@@ -187,6 +188,7 @@ def main() -> int:
                 say(step="ส่งออก MP4", story=n)
                 row["mp4"] = ve.draft_hf_export(ve.ExportRequest(path=path))["file"]
             rows.append(row)
+            cutlog.log_run(raw, st, n, path, {k: v for k, v in vars(a).items() if k != "video"}, row["length"])
         except (video_edit.VideoEditError, HTTPException) as exc:
             say(error=detail(exc), story=n, title=st["title"])
             return 1
