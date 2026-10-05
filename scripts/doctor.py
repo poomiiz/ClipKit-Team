@@ -144,7 +144,6 @@ print("ClipKit Team")
 for ok, name, detail in results:
     print(f"{'WARN' if ok == 'WARN' else 'OK  ' if ok else 'FAIL'} {name:18} {detail}")
 ready = all(r[0] for r in results)
-print("
-READY" if ready else "
-NOT READY - fix the FAIL lines (most are fixed by:  clipkit repair)")
+print()
+print("READY" if ready else "NOT READY - fix the FAIL lines (most are fixed by:  clipkit repair)")
 sys.exit(0 if ready else 1)
