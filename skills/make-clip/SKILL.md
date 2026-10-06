@@ -95,6 +95,9 @@ never as a loose file on the Desktop - `python scripts/cutlog.py feedback "<proj
 exact error text>" --fix "<what you tried>"`. It lands in the team sheet with the version. Do not hand-edit a
 project's draft_content.json / Timelines files or ClipKit's code to work around it: a hand fix hides the bug and
 is lost on the next update. Tell the person it is reported.
+ClipKit also seals every project it writes: after a hand edit it stops with "ถูกแก้นอก ClipKit". Then make the
+project again from the raw file. `scripts/accept_edit.py` is only for a change the person made in CapCut themselves,
+never to get past your own edit.
 
 ## Subtitle presets (each person makes their own)
 `presets/<name>.json`: how the normal text and the emphasis text look, plus an optional small translated
