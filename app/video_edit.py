@@ -424,12 +424,15 @@ def _template_dir() -> Path:
         tracks = {t["type"]: t for t in draft.get("tracks", [])}
         return bool(tracks.get("video", {}).get("segments")) and             bool(tracks.get("text", {}).get("segments"))
 
+    # A project CapCut itself made, in its current folder layout (Timelines/project.json): a clone of a ClipKit-made
+    # project or an old-layout one passes its faults on, and CapCut 9.x refuses old-layout projects ("unusual path").
     candidates = [p for p in root.iterdir()
-                  if (p / "draft_content.json").is_file() and usable(p)]
+                  if (p / "draft_content.json").is_file() and not (p / "clipkit.json").is_file()
+                  and not p.name.endswith("· CapCut") and (p / "Timelines" / "project.json").is_file() and usable(p)]
     if not candidates:
         raise VideoEditError(
-            f"no draft in {root} can serve as a template — one project with a "
-            f"video clip and at least one subtitle is needed")
+            f"no CapCut project in {root} can serve as a template - make one project in CapCut itself "
+            f"(any clip with at least one subtitle), save it, then try again")
     return max(candidates, key=lambda p: (p / "draft_content.json").stat().st_mtime)
 
 
