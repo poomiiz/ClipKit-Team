@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="th" data-resolution="portrait">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<!--
+  New ClipKit motion effect (made by scripts/motion_new.py). Change the look in <style> and the movement in
+  the timeline below. Transparent background for a CapCut overlay; preview over footage with ?bg=<image>.
+  Thai text: animate whole graphemes (seg() below), never single code points, or vowels and tone marks fall off.
+-->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: transparent; }
+  #root { position: absolute; inset: 0; }
+  #bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* 1300 px from the top keeps the text clear of the apps' top bar, caption area and button column */
+  .text { position: absolute; left: 50%; top: 1300px; white-space: nowrap; font: 700 120px "Sukhumvit Set", "DB Heavent", sans-serif;
+          color: #fff; -webkit-text-stroke: 10px #000; paint-order: stroke fill; }
+</style>
+<script type="application/json" id="clipkit-motion">
+{"role": "คำเน้น", "mood": "ทั่วไป", "label": "__LABEL__", "length": "duration",
+   "fields": [{"key": "text", "label": "ข้อความ", "type": "text", "default": "ทดสอบภาษาไทย"},
+              {"key": "duration", "label": "ยาว (วินาที)", "type": "number", "default": 2.5},
+              {"key": "font", "label": "ฟอนต์", "type": "font", "default": ""}]}
+</script>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="2.5" data-width="1080" data-height="1920">
+  <img id="bg" class="clip" data-start="0" data-duration="2.5" data-track-index="0" alt="" style="display:none">
+</div>
+<script>
+  // values come from ?key=... in the preview URL, or window.KIT injected by the ClipKit app before render
+  const ARGS = { ...Object.fromEntries(new URLSearchParams(location.search)), ...(window.KIT || {}) };
+  const TEXT = ARGS.text || "ทดสอบภาษาไทย", DUR = parseFloat(ARGS.duration) || 2.5;
+  const root = document.getElementById("root"), bg = document.getElementById("bg");
+  root.dataset.duration = DUR; bg.dataset.duration = DUR;
+  if (ARGS.bg) { bg.src = ARGS.bg; bg.style.display = "block"; }
+
+  const seg = (s) => [...new Intl.Segmenter("th", { granularity: "grapheme" }).segment(s)].map(x => x.segment);
+  const el = document.createElement("div");
+  el.className = "text clip"; el.dataset.start = 0; el.dataset.duration = DUR; el.dataset.trackIndex = 1;
+  if (ARGS.font) el.style.fontFamily = `"${ARGS.font}", "Sukhumvit Set", sans-serif`;
+  el.innerHTML = seg(TEXT).map(c => `<span class="ch">${c}</span>`).join("");
+  root.appendChild(el);
+  // a long line must not run off the frame: shrink to 960 px (60 px margin each side)
+  const fit = () => { el.style.fontSize = "120px"; if (el.offsetWidth > 960) el.style.fontSize = 120 * 960 / el.offsetWidth + "px"; };
+  fit(); document.fonts.ready.then(fit);
+
+  const tl = gsap.timeline({ paused: true });
+  gsap.set(el, { xPercent: -50 });
+  // the movement: each grapheme pops up in turn, then the line fades out at the end
+  tl.from(el.querySelectorAll(".ch"), { y: 60, opacity: 0, duration: 0.25, ease: "back.out(2)", stagger: 0.04 }, 0);
+  tl.to(el, { opacity: 0, duration: 0.2 }, DUR - 0.2);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+</script>
+</body>
+</html>
