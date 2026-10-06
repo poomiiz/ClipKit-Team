@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>คลังอนิเมชัน</title>
+<style>
+:root{--bg:#0c0f17;--card:#141824;--card2:#1b2030;--line:#262d40;--txt:#f1f4fb;--sub:#c5cde0;--mut:#828ca4;--acc:#7c5cff;--ok:#10b981;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 "Segoe UI","Leelawadee UI",system-ui,sans-serif}
+main{max-width:1200px;margin:0 auto;padding:22px 18px 60px}
+h1{font-size:23px;margin:0 0 4px}.sub{color:var(--mut);font-size:14px;margin:0 0 16px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.bar b{color:var(--mut);font-size:13px;font-weight:600;margin-right:4px}
+.chip{background:var(--card2);color:var(--sub);border:1px solid var(--line);border-radius:99px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
+.chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+input[type=search]{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:8px 12px;font:inherit;min-width:220px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:14px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.item video,.item .ph{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:grid;place-items:center;color:var(--mut);font-size:13px}
+.item .b{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
+.item .t{font-weight:700;font-size:14px}
+.item .d{color:var(--mut);font-size:12.5px;line-height:1.4;flex:1}
+.tags{display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--card2);color:var(--sub)}
+.tag.ours{background:#0f9d76;color:#fff}.tag.warn{background:rgba(245,158,11,.15);color:var(--warn)}
+button.act{background:var(--card2);color:var(--sub);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:12.5px;cursor:pointer}
+button.act:hover{border-color:var(--acc);color:#fff}
+.new{background:linear-gradient(120deg,#2a1f63,#1a2a4a);border:1px solid #3b3480;border-radius:14px;padding:16px;margin:16px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.new select{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}
+.new button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer}
+code{display:block;margin-top:8px;padding:8px 10px;background:#080a10;border-radius:8px;font-size:13px;word-break:break-all;width:100%}
+.count{color:var(--mut);font-size:13px}
+</style>
+<link rel="stylesheet" href="/shell.css?v=3">
+</head>
+<body>
+<main>
+  <h1>คลังอนิเมชัน</h1>
+  <p class="sub">เทมเพลตของเรา (ใช้ได้ทันที) และคลังสำเร็จรูปของ HyperFrames แยกตามหน้าที่และอารมณ์ · อยากได้ท่าใหม่ ให้ Claude สร้างโดยดูจากคลังนี้ไม่ให้ซ้ำ</p>
+
+  <div class="new" id="newBox" style="display:none">
+    <b>สร้างท่าใหม่</b>
+    <select id="nRole"></select>
+    <select id="nMood"></select>
+    <button id="nGo">คัดลอกคำสั่งให้ Claude</button>
+    <code id="nCmd" style="display:none"></code>
+  </div>
+
+  <div class="bar"><b>แหล่ง</b><span id="fSrc"></span></div>
+  <div class="bar"><b>ใช้ทำ</b><span id="fRole"></span></div>
+  <div class="bar"><b>อารมณ์</b><span id="fMood"></span></div>
+  <div class="bar"><input type="search" id="q" placeholder="ค้นชื่อหรือคำอธิบาย"><span class="count" id="count"></span></div>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let ALL = [], F = {src: 'ทั้งหมด', role: 'ทั้งหมด', mood: 'ทั้งหมด'};
+const ROLES = ['หัวคลิป', 'คำเน้น', 'ซับ', 'ป้ายชื่อ', 'ตัวเลข/ข้อมูล', 'โซเชียล', 'ทรานสิชัน', 'บรรยากาศ', 'ปก', 'อื่น ๆ'];
+const MOODS = ['ทางการ', 'เล่าเรื่อง', 'ตื่นเต้น', 'ตลก/โซเชียล', 'ทั่วไป'];
+function chips(box, key, list) {
+  $(box).innerHTML = ['ทั้งหมด', ...list].map(v => `<button class="chip${F[key] === v ? ' on' : ''}" data-v="${v}">${v}</button>`).join('');
+  $(box).querySelectorAll('button').forEach(b => b.onclick = () => { F[key] = b.dataset.v; draw(); });
+}
+function copy(text, btn) { navigator.clipboard.writeText(text).then(() => { const t = btn.textContent; btn.textContent = '✓ คัดลอกแล้ว'; setTimeout(() => btn.textContent = t, 1500); }); }
+function draw() {
+  chips('fSrc', 'src', ['ของเรา', 'HyperFrames']);
+  chips('fRole', 'role', ROLES);
+  chips('fMood', 'mood', MOODS);
+  const q = $('q').value.trim().toLowerCase();
+  const rows = ALL.filter(x => (F.src === 'ทั้งหมด' || (F.src === 'ของเรา') === (x.source === 'clipkit'))
+    && (F.role === 'ทั้งหมด' || x.role === F.role) && (F.mood === 'ทั้งหมด' || x.mood === F.mood)
+    && (!q || (x.name + ' ' + (x.title || '') + ' ' + (x.description || '')).toLowerCase().includes(q)));
+  $('count').textContent = rows.length + ' ชิ้น';
+  $('grid').innerHTML = '';
+  rows.slice(0, 120).forEach(x => {
+    const el = document.createElement('div');
+    el.className = 'item';
+    const ours = x.source === 'clipkit';
+    el.innerHTML = (x.preview ? `<video src="${x.preview}" muted loop playsinline preload="none"></video>` : `<div class="ph">${ours ? 'เทมเพลตของเรา' : 'ไม่มีตัวอย่าง'}</div>`) +
+      `<div class="b"><div class="t"></div><div class="tags">${ours ? '<span class="tag ours">ของเรา</span>' : ''}<span class="tag">${x.role}</span>${x.mood ? `<span class="tag">${x.mood}</span>` : ''}` +
+      `${x.thai === 'test' ? '<span class="tag warn">ต้องลองคำไทย</span>' : ''}${x.vertical === 'adapt' ? '<span class="tag warn">ปรับแนวตั้ง</span>' : ''}</div>` +
+      `<div class="d"></div><div style="display:flex;gap:6px"></div></div>`;
+    el.querySelector('.t').textContent = x.title || x.name;
+    el.querySelector('.d').textContent = x.description || (ours ? 'ใช้ได้จากหน้าตัวหนังสือเคลื่อนไหว / ทำปก' : '');
+    const acts = el.querySelector('.b > div:last-child');
+    if (ours) {
+      const b = document.createElement('button'); b.className = 'act'; b.textContent = 'ดูตัวอย่าง';
+      b.onclick = () => window.open('/motion/' + x.name + '/index.html', '_blank'); acts.appendChild(b);
+    } else if (CAN) {
+      const b = document.createElement('button'); b.className = 'act'; b.textContent = 'ให้ Claude ทำเป็นเทมเพลตของเรา';
+      b.onclick = () => copy(`ClipKit: ทำเทมเพลตจาก HyperFrames "${x.name}"`, b); acts.appendChild(b);
+    }
+    const v = el.querySelector('video');
+    if (v) { el.onmouseenter = () => v.play().catch(() => {}); el.onmouseleave = () => v.pause(); }
+    $('grid').appendChild(el);
+  });
+}
+$('nRole').innerHTML = ROLES.filter(r => r !== 'อื่น ๆ').map(r => `<option>${r}</option>`).join('');
+$('nMood').innerHTML = MOODS.filter(m => m !== 'ทั่วไป').map(m => `<option>${m}</option>`).join('');
+$('nGo').onclick = () => {
+  const cmd = `ClipKit: สร้างท่าใหม่ ใช้ทำ "${$('nRole').value}" อารมณ์ "${$('nMood').value}"`;
+  $('nCmd').textContent = cmd; $('nCmd').style.display = 'block'; copy(cmd, $('nGo'));
+};
+$('q').addEventListener('input', draw);
+let CAN = false;
+fetch('/api/kit/library').then(r => r.json()).then(j => { CAN = j.can_create; $('newBox').style.display = CAN ? '' : 'none'; ALL = [...j.ours, ...j.hyperframes]; draw(); })
+  .catch(e => { $('grid').textContent = '❌ ' + e.message; });
+</script>
+<script src="/shell.js?v=6"></script>
+</body>
+</html>

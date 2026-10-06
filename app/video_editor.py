@@ -783,7 +783,33 @@ def config() -> dict[str, Any]:
         "whisper_cpu_fallback": video_edit.WHISPER_CPU_FALLBACK,
         "gpu": video_edit._has_cuda(),
         "local_llm": video_edit.LOCAL_LLM_URL,
+        "simple": video_edit.kitconfig.simple(),
+        "team": video_edit.kitconfig.is_team(),
     }
+
+
+@router.post("/update")
+def update() -> dict[str, Any]:
+    """The Update button: take the newest ClipKit from GitHub (team clones), then restart the app."""
+    root = Path(__file__).resolve().parents[1]
+    git = lambda *a: subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True, timeout=120)  # noqa: E731
+    if git("fetch", "-q").returncode != 0:
+        raise HTTPException(400, "ต่อ GitHub ไม่ได้ ลองเช็กเน็ตแล้วกดใหม่")
+    if git("rev-parse", "HEAD").stdout == git("rev-parse", "@{u}").stdout:
+        return {"updated": False, "note": "เป็นตัวล่าสุดแล้ว"}
+    r = git("pull", "-q", "--ff-only")
+    if r.returncode != 0:
+        raise HTTPException(400, "อัปเดตไม่ได้ เพราะมีไฟล์ในโฟลเดอร์ ClipKit ถูกแก้ด้วยมือ ให้สั่ง clipkit repair")
+    import sys
+    import threading
+    def restart():
+        import os
+        import time
+        time.sleep(1)
+        subprocess.Popen([sys.executable, *sys.argv], cwd=str(Path(__file__).parent))
+        os._exit(0)
+    threading.Thread(target=restart, daemon=True).start()
+    return {"updated": True, "note": "อัปเดตแล้ว กำลังเปิดใหม่"}
 
 
 # --- motion on top of the clip: pick a subtitle line, pick a template, it renders and sits at that time ---
@@ -1024,8 +1050,9 @@ def draft_auto(req: AutoRequest) -> dict[str, Any]:
         style.setdefault("zoomcut", True)
         style.setdefault("skin", render.SKIN_DEFAULT)
         f.write_text(json.dumps(style, ensure_ascii=False), encoding="utf-8")
-        b = broll_fill(req.path)
-        steps.append(f"ภาพประกอบ {len(b['broll'])} จุด" if b["queries"] else "ภาพประกอบ: ยังไม่ได้ให้ Claude เลือกคำค้น")
+        if not video_edit.kitconfig.simple():
+            b = broll_fill(req.path)
+            steps.append(f"ภาพประกอบ {len(b['broll'])} จุด" if b["queries"] else "ภาพประกอบ: ยังไม่ได้ให้ Claude เลือกคำค้น")
         cfg = kit_settings._read_config()
         out = cfg.get("output_dir") or cfg.get("work_root")
         if not out:

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import capcut_edit
+import video_edit
 from video_edit import FFMPEG, VideoEditError, probe
 
 US = 1_000_000
@@ -491,6 +492,9 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
                     last_b = a
         else:
             plan = placed.get("broll", [])
+        simple = video_edit.kitconfig.simple()  # simple mode: no b-roll, music or sound effects
+        if simple:
+            plan = []
         for k, it in enumerate(plan):
             if not Path(it["file"]).is_file():
                 raise VideoEditError(f"b-roll file missing: {it['file']}")
@@ -540,6 +544,8 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
             raise VideoEditError(f"music file missing: {music_file}")
         music_vol = mus.get("volume", 0.12) if mus is not None else style.get("music_volume", 0.12)
         fx = (placed or {}).get("sfx", {"on": style.get("sfx", True), "volume": style.get("sfx_volume", 1.0)})
+        if simple:
+            music_file, fx = None, {"on": False, "volume": 0}
         if dry:  # what the export would contain, for the timeline editor; nothing is encoded
             length = sum(s["target_timerange"]["duration"] for s in segs) / US
             return {"duration": round(length, 2), "width": W, "height": H, "look": anim, "style": style,

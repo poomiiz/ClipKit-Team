@@ -73,3 +73,20 @@ def __getattr__(name):
     if name == "OLD_BUILDS":
         return CFG.get("capcut_old_builds") or str(Path(need("capcut_drafts")).parent / "_old_builds")
     raise AttributeError(name)
+
+
+def is_team() -> bool:
+    """A clone of the team repo (ClipKit-Team)."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(_KIT), "remote", "get-url", "origin"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return "ClipKit-Team" in r.stdout
+
+
+def simple() -> bool:
+    """Simple mode: cut + subtitles + title only, no b-roll, music or sound effects.
+    config.json "simple": true/false wins; unset = on for team clones, off elsewhere."""
+    v = CFG.get("simple")
+    return is_team() if v in (None, "") else bool(v)

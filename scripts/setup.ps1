@@ -40,5 +40,6 @@ if (-not ($userPath -split ";" | Where-Object { $_ -eq $root })) {
     [Environment]::SetEnvironmentVariable("Path", "$userPath;$root", "User")
     Write-Host "Added $root to PATH: open a new terminal to use the clipkit command."
 }
+powershell -NoProfile -ExecutionPolicy Bypass -File "$root\scripts\app_icon.ps1"
 python "$root\scripts\fetch_model.py"
 python "$root\scripts\doctor.py"

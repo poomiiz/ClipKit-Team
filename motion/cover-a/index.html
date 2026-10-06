@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="th" data-resolution="portrait">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<!--
+  ClipKit cover A - "bold two colours" (orange headline + white sub-line, no tilt).
+  Set COVER below (or ?l1=&l2=&bg=&style= in the preview URL). Render one frame:
+    npx --yes hyperframes@0.8.101 render --format png-sequence -o <dir>
+  STYLE "orange" = orange headline; "blue" = blue headline, red sub accent.
+-->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #111; }
+  #root { position: absolute; inset: 0; }
+  #bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .t { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center;
+       font-family: "DB Heavent", "Sukhumvit Set", sans-serif; font-weight: 700; line-height: 1; }
+  #l1 { top: 1250px; font-size: 235px; -webkit-text-stroke: 12px #fff; paint-order: stroke fill;
+        filter: drop-shadow(0 8px 14px rgba(0,0,0,.45)); }
+  #l2 { top: 1488px; font-size: 128px; color: #fff; -webkit-text-stroke: 14px #111; paint-order: stroke fill;
+        filter: drop-shadow(0 6px 10px rgba(0,0,0,.4)); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="0.1" data-width="1080" data-height="1920">
+  <img id="bg" class="clip" data-start="0" data-duration="0.1" data-track-index="0" alt="" src="preview-bg.jpg">
+  <div id="l1" class="t clip" data-start="0" data-duration="0.1" data-track-index="1"></div>
+  <div id="l2" class="t clip" data-start="0" data-duration="0.1" data-track-index="2"></div>
+</div>
+<script>
+  // c1/s1 = headline fill/outline, c2/s2 = sub-line fill/outline (any CSS colour, e.g. #ff7d00)
+  const COVER = { l1: "ธุรกิจสมัยนี้", l2: "ไม่ต้องแย่งทำเลอีกแล้ว", bg: "preview-bg.jpg",
+                  c1: "#ff7d00", s1: "#ffffff", c2: "#ffffff", s2: "#111111", font: "" };
+
+  const q = new URLSearchParams(location.search);
+  const c = { ...COVER, ...Object.fromEntries([...q].filter(([k]) => k in COVER)) };
+  const l1 = document.getElementById("l1"), l2 = document.getElementById("l2");
+  l1.textContent = c.l1; l2.textContent = c.l2;
+  l1.style.color = c.c1; l1.style.webkitTextStrokeColor = c.s1;
+  l2.style.color = c.c2; l2.style.webkitTextStrokeColor = c.s2;
+  if (c.font) for (const el of [l1, l2]) el.style.fontFamily = `"${c.font}", "DB Heavent", sans-serif`;
+  document.getElementById("bg").src = c.bg;
+  // shrink a line that would run off the 1080 px frame (keep a 60 px margin each side), after fonts load
+  const fit = () => { for (const el of [l1, l2]) {
+    el.style.fontSize = "";
+    const w = el.getBoundingClientRect().width;
+    if (w > 960) el.style.fontSize = parseFloat(getComputedStyle(el).fontSize) * 960 / w + "px";
+  } };
+  fit(); document.fonts.ready.then(fit);
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = gsap.timeline({ paused: true }).set({}, {}, 0.1);
+</script>
+</body>
+</html>

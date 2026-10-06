@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="th" data-resolution="portrait">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<!--
+  ClipKit motion stock #1 - "sentence pair"
+  White lead types in (double cursor), blue punch snaps in with a horizontal smear, both end together.
+  Copied from hand-made CapCut edits: white size 25 x0.91 y-0.37 "เคอร์เซอร์คู่" 0.5 s,
+  blue rgb(5,17,146) size 30 x1.35 y-0.50 white stroke "คลื่นเสียง" 0.17 s.
+  Edit PAIRS below (seconds from the start of this layer). Background: transparent for CapCut overlay;
+  add ?bg=<image> to the preview URL to check it over footage.
+-->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: transparent; }
+  #root { position: absolute; inset: 0; }
+  #bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .pair { position: absolute; left: 0; right: 0; top: 0; opacity: 0; }
+  .lead, .punch { position: absolute; white-space: nowrap; font-family: var(--font, "Sukhumvit Set", "DB Heavent", sans-serif); font-weight: 700; }
+  .lead {
+    left: 92px; top: 1250px; font-size: 70px; color: #fff;
+    text-shadow: 0 0 2px #000, 0 4px 10px rgba(0,0,0,.75);
+  }
+  .lead .cur { display: inline-block; width: 5px; height: 62px; margin-left: 6px; background: #fff; vertical-align: -6px; box-shadow: 8px 0 0 #fff; }
+  .punch {
+    left: 50%; top: 1340px; font-size: 150px; color: rgb(5,17,146);
+    -webkit-text-stroke: 9px #fff; paint-order: stroke fill;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,.55));
+  }
+</style>
+<!-- ClipKit motion page reads this: label, the form fields, and how the clip length is found
+     ("duration" field, or "pairs" = end of the last pair). Copy this block into a new template. -->
+<script type="application/json" id="clipkit-motion">
+{"role": "คำเน้น", "mood": "เล่าเรื่อง", "label": "คำโปรย · ประโยคขาว + คำเน้นน้ำเงิน", "length": "pairs",
+   "fields": [{"key": "pairs", "label": "ประโยค (บรรทัดละคู่: ตัวขาว / คำเน้น)", "type": "pairs",
+               "default": "ผู้รับเหมาก็จะ / ถูกกดดัน\nเรื่องงานที่ต้องเสร็จ / ตามกำหนดเวลา\nเพื่อตอบสนอง / โจทย์ผู้บริโภค",
+               "each": 2.5, "delay": 0.8},
+              {"key": "font", "label": "ฟอนต์", "type": "font", "default": ""}]}
+</script>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="8" data-width="1080" data-height="1920">
+  <img id="bg" class="clip" data-start="0" data-duration="8" data-track-index="0" alt="" style="display:none">
+</div>
+<script>
+  // [start, end, white lead, blue punch, punch delay after lead]
+  const DEMO = [
+    [0.0, 2.5, "ผู้รับเหมาก็จะ", "ถูกกดดัน", 1.0],
+    [2.5, 5.0, "เรื่องงานที่ต้องเสร็จ", "ตามกำหนดเวลา", 0.6],
+    [5.0, 8.0, "เพื่อตอบสนอง", "โจทย์ผู้บริโภค", 1.0],
+  ];
+  // values come from ?key=... in the preview URL, or window.KIT injected by the ClipKit app before render
+  const ARGS = { ...Object.fromEntries(new URLSearchParams(location.search)), ...(window.KIT || {}) };
+  // ARGS.pairs = JSON array in the same shape, e.g. [[0,2.5,"ผู้รับเหมาก็จะ","ถูกกดดัน",1]]
+  const PAIRS = ARGS.pairs ? (typeof ARGS.pairs === "string" ? JSON.parse(ARGS.pairs) : ARGS.pairs) : DEMO;
+  const TOTAL = Math.max(...PAIRS.map(p => p[1]));
+  if (ARGS.font) document.documentElement.style.setProperty("--font", `"${ARGS.font}", "Sukhumvit Set", sans-serif`);
+  // SPEED 2 = typing, punch delay and smear twice as fast as the original CapCut edit; ?speed= overrides.
+  // Pair start/end stay as written (they follow the speech).
+  const SPEED = parseFloat(ARGS.speed) || 2;
+  const TYPE = 0.5 / SPEED, SMEAR = 0.17 / SPEED;
+
+  const bg = ARGS.bg;
+  document.getElementById("root").dataset.duration = TOTAL; document.getElementById("bg").dataset.duration = TOTAL;
+  if (bg) { const im = document.getElementById("bg"); im.src = bg; im.style.display = "block"; }
+
+  const seg = (s) => [...new Intl.Segmenter("th", { granularity: "grapheme" }).segment(s)].map(x => x.segment);
+  const root = document.getElementById("root");
+  const tl = gsap.timeline({ paused: true });
+
+  PAIRS.forEach(([start, end, lead, punch, delay], i) => {
+    const p = document.createElement("div");
+    p.className = "pair clip"; p.id = "pair" + i;
+    p.dataset.start = start; p.dataset.duration = end - start; p.dataset.trackIndex = 1 + i;
+    const chars = seg(lead);
+    p.innerHTML = `<div class="lead">${chars.map(c => `<span class="ch">${c}</span>`).join("")}<span class="cur"></span></div><div class="punch">${punch}</div>`;
+    root.appendChild(p);
+    const cur = p.querySelector(".cur"), pu = p.querySelector(".punch");
+    // keep both lines inside the frame whatever the font (punch is centred, lead starts at 92 px)
+    const fit = () => [[pu, 960], [p.querySelector(".lead"), 900]].forEach(([el, max]) => {
+      el.style.fontSize = "";
+      if (el.offsetWidth > max) el.style.fontSize = parseFloat(getComputedStyle(el).fontSize) * max / el.offsetWidth + "px";
+    });
+    fit(); document.fonts.ready.then(fit);
+
+    tl.set(p, { opacity: 1 }, start);
+    // typewriter: graphemes appear one by one (Thai vowels/tone marks stay with their consonant).
+    // display toggles instead of callbacks so seeking to any frame (renderer) gives the same picture.
+    const spans = p.querySelectorAll(".ch");
+    tl.set(spans, { display: "none" }, 0);
+    spans.forEach((s, k) => tl.set(s, { display: "inline" }, start + TYPE * (k + 1) / spans.length));
+    tl.set(cur, { opacity: 0 }, start + TYPE + 0.15 / SPEED);
+    // punch: smear in from the left, squash back to normal
+    gsap.set(pu, { xPercent: -50 });
+    tl.fromTo(pu, { opacity: 0, x: -160, scaleX: 1.9, filter: "blur(10px) drop-shadow(0 6px 10px rgba(0,0,0,0))" },
+                  { opacity: 1, x: 0, scaleX: 1, filter: "blur(0px) drop-shadow(0 6px 10px rgba(0,0,0,.55))", duration: SMEAR, ease: "power2.out" }, start + delay / SPEED);
+    tl.set(p, { opacity: 0 }, end);
+  });
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines["main"] = tl;
+</script>
+</body>
+</html>
