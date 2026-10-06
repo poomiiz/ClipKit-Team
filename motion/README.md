@@ -15,7 +15,8 @@ No client footage or frames in this repo.
 | cover-a | cover: bold headline (orange / blue) + white sub-line, renders a 1080x1920 PNG | hand-made cover |
 
 ## Adding a new effect
-1. Copy a folder (e.g. `hook-title`) to `motion/<new-name>/` and change the animation.
+1. `python scripts/motion_new.py <new-name> --label "..."` makes `motion/<new-name>/` from a Thai-safe starter
+   (or `--from hook-title` to copy an effect); change the animation, then `--render` for a test MOV.
 2. Edit its `<script type="application/json" id="clipkit-motion">` block: `label` (shown in the menu),
    `fields` (`text`, `number`, `select` with `options`, or `pairs`), and `length` (`"duration"` or `"pairs"`).
    The template reads the values from `window.KIT` (render) or the URL (preview).

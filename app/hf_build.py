@@ -34,7 +34,7 @@ def _proxy(out: Path, src: str, segs: list[dict], skin: float = 0) -> str:
     live player shows it: made once per cut list and skin strength."""
     import hashlib
     import subprocess
-    key = hashlib.md5(json.dumps([[(s["media_start"], s["dur"]) for s in segs], round(skin, 2), render.SKIN_FILTER, 2]).encode()).hexdigest()[:10]
+    key = hashlib.md5(json.dumps([[(s["media_start"], s["dur"]) for s in segs], round(skin, 2), render.SKIN_FILTER, render.EDGE_FADE, 2]).encode()).hexdigest()[:10]
     dst = out / "media" / f"footage_{key}.mp4"
     dst.parent.mkdir(exist_ok=True)
     if not dst.is_file():
@@ -45,7 +45,7 @@ def _proxy(out: Path, src: str, segs: list[dict], skin: float = 0) -> str:
                 pass
         a, b = min(s["media_start"] for s in segs), max(s["media_start"] + s["dur"] for s in segs)
         parts = "".join(f"[0:v]trim={s['media_start'] - a:.3f}:{s['media_start'] - a + s['dur']:.3f},setpts=PTS-STARTPTS[v{i}];"
-                        f"[0:a]atrim={s['media_start'] - a:.3f}:{s['media_start'] - a + s['dur']:.3f},asetpts=PTS-STARTPTS[a{i}];"
+                        f"[0:a]atrim={s['media_start'] - a:.3f}:{s['media_start'] - a + s['dur']:.3f},asetpts=PTS-STARTPTS,{render.edge_fades(s['dur'])}[a{i}];"
                         for i, s in enumerate(segs))
         graph = parts + "".join(f"[v{i}][a{i}]" for i in range(len(segs))) + f"concat=n={len(segs)}:v=1:a=1[cv][ca];[cv]scale='if(gt(iw,ih),min(1920,iw),-2)':'if(gt(iw,ih),-2,min(1920,ih))'" + \
             (f",{render.SKIN_FILTER.format(skin=skin)}" if skin > 0 else "") + "[sv]"  # smoothing after the size-down: 4x less work
@@ -67,6 +67,7 @@ def build(path: str) -> Path:
     W, H, D = t["width"], t["height"], t["duration"]
     st = t["style"] or {}
     k = min(W, H) / 1080 * render.CAPCUT_PX
+    box, lh = render.safe_box(st), float(st.get("line_h", render.LINE_H))
     fit = t["fit"]
     c = st.get("color") or {}
     w = float(c.get("warmth", 0))
@@ -112,14 +113,18 @@ def build(path: str) -> Path:
     def text(words: str, size: float, y: float, fill, stroke, width: float, a: float, b: float, grow: str = "both", floor: float = 0, one: bool = False) -> str:
         i = nid("t")
         # same fitting as the ffmpeg export: one line when it fits, two balanced lines, then smaller
-        lines, px = render._fit(words, render.DEFAULT_FONT, size * k, W * 0.9, one)
+        lines, px = render._fit(words, render.DEFAULT_FONT, size * k, W * box["w"], one)
         # a wrapped lead grows upward and a wrapped punch downward, so the pair never covers each other
         top = H / 2 - y * H / 2 + {"up": px * 0.625, "down": -px * 0.625}.get(grow, 0)
         top = max(top, floor) if grow == "down" else top
         shift = {"up": "-100%", "down": "0"}.get(grow, "-50%")
+        # same safe box as the ffmpeg export (render.safe_box): clear of the apps' top bar, buttons and caption
+        block = len(lines) * px * lh
+        upper = top - {"-100%": block, "0": 0}.get(shift, block / 2)
+        top += min(max(upper, H * box["top"]), H * box["bottom"] - block) - upper
         tops[i] = top
         els.append(f'<div id="{i}" class="clip txt" data-start="{a:.3f}" data-duration="{max(0.05, b - a - 0.034):.3f}" data-track-index="3" '  # one frame short: the next phrase never shares a frame
-                   f'style="top:{top:.0f}px;transform:translateY({shift});font-size:{px:.0f}px;color:{_css_color(fill)};'
+                   f'style="top:{top:.0f}px;transform:translateY({shift});font-size:{px:.0f}px;line-height:{lh};color:{_css_color(fill)};'
                    f'-webkit-text-stroke:{px * width * 1.2 + 2:.1f}px {_css_color(stroke)}">{"<br>".join(html.escape(x) for x in lines)}</div>')
         return i
 
