@@ -11,3 +11,4 @@ if ($LASTEXITCODE -ne 0) { Add-Content $log "$(Get-Date -Format s) skipped: file
 if ($changed -contains "requirements.txt") { python -m pip install -q -r "$root\requirements.txt" }
 & "$PSScriptRoot\app_icon.ps1" | Out-Null
 Add-Content $log "$(Get-Date -Format s) updated to $(git -C $root log -1 --format=%h)"
+python "$root\scripts\cutlog.py" ping "updated" | Out-Null

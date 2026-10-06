@@ -18,4 +18,5 @@ if (-not (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue)) {
     $opt = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $task -Action $act -Trigger $when -Settings $opt | Out-Null
     Write-Host "Auto update every 12 hours: on"
+    python "$root\scripts\cutlog.py" ping "installed" | Out-Null
 }

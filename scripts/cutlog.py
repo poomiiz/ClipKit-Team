@@ -225,6 +225,8 @@ def main() -> int:
     fb.add_argument("said")
     fb.add_argument("--fix", default="")
     sub.add_parser("report")
+    pg = sub.add_parser("ping")  # a machine says it is set up / updated (the "machines" rows in the team sheet)
+    pg.add_argument("event")
     sh = sub.add_parser("sheet")
     sh.add_argument("url")
     a = ap.parse_args()
@@ -241,6 +243,9 @@ def main() -> int:
         cfg_f.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(_sheet({"type": "test", **_who(), "time": time.strftime("%Y-%m-%d %H:%M:%S"), "version": version(),
                       "problems": "test row from clipkit sheet"}))
+    elif a.cmd == "ping":
+        print(_sheet({"type": "machine", **_who(), "time": time.strftime("%Y-%m-%d %H:%M:%S"), "version": version(),
+                      "video": "(เครื่อง)", "problems": a.event}))
     else:
         report()
     return 0
