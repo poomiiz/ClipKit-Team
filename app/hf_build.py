@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import quote
 
 import render
+import video_edit
 
 
 def _local(out: Path, path: str, name: str | None = None) -> str:
@@ -99,7 +100,11 @@ def build(path: str) -> Path:
         anim.append(f'tl.set(".cam",{{scale:{render.ZOOM}}},{a:.3f});tl.set(".cam",{{scale:1}},{b:.3f});')
     # b-roll over the speaker
     for b in t["broll"]:
-        if b.get("file"):
+        if b.get("file") and video_edit.is_image(b["file"]):
+            els.append(f'<img id="{nid("b")}" class="clip" src="{_local(out, b["file"])}" data-start="{b["start"]:.3f}" '
+                       f'data-duration="{b["dur"]:.3f}" data-track-index="2" '
+                       f'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">')
+        elif b.get("file"):
             els.append(f'<video id="{nid("b")}" class="clip" src="{_local(out, b["file"])}" muted playsinline data-start="{b["start"]:.3f}" '
                        f'data-duration="{b["dur"]:.3f}" data-media-start="0" data-track-index="2" '
                        f'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>')

@@ -190,10 +190,13 @@ def build(path: str) -> tuple[Path, list[str]]:
             continue
         info = video_edit.probe(it["file"])
         mat = copy.deepcopy(_T["broll"]["mat"])
+        still = video_edit.is_image(it["file"])
+        # CapCut keeps a picture as type "photo" with a 3-hour length; as a "video" it would last one frame
         mat.update(path=Path(it["file"]).as_posix(), material_name=Path(it["file"]).name, name=Path(it["file"]).name,
-                   duration=_us(info["duration"]), width=info["width"], height=info["height"])
+                   duration=_us(10800) if still else _us(info["duration"]), width=info["width"], height=info["height"],
+                   type="photo" if still else "video")
         seg = _clone(draft, _T["broll"], mat, "videos")
-        dur = min(float(it["dur"]), info["duration"])
+        dur = float(it["dur"]) if still else min(float(it["dur"]), info["duration"])
         seg["source_timerange"] = {"start": 0, "duration": _us(dur)}
         seg["target_timerange"] = {"start": _us(float(it["start"])), "duration": _us(dur)}
         cover = max(W / info["width"], H / info["height"]) / min(W / info["width"], H / info["height"])

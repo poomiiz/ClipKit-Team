@@ -52,6 +52,14 @@ class VideoEditError(RuntimeError):
 
 # ── probing ──────────────────────────────────────────────────────────
 
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic"}
+
+
+def is_image(path: str) -> bool:
+    """A still picture used as b-roll: shown for the whole span, not as a 1-frame video."""
+    return Path(path).suffix.lower() in IMAGE_EXT
+
+
 def probe(path: str) -> dict[str, Any]:
     out = subprocess.run(
         [FFPROBE, "-v", "error", "-print_format", "json",

@@ -498,7 +498,8 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
         for k, it in enumerate(plan):
             if not Path(it["file"]).is_file():
                 raise VideoEditError(f"b-roll file missing: {it['file']}")
-            n = add("-i", it["file"])
+            # a still picture is one frame: loop it so it stays up for the whole span
+            n = add("-loop", "1", "-i", it["file"]) if video_edit.is_image(it["file"]) else add("-i", it["file"])
             a, e = float(it["start"]), float(it["start"]) + float(it["dur"])
             graph += (f";[{n}:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
                       f"trim=0:{e - a:.3f},setpts=PTS-STARTPTS+{a:.3f}/TB[br{k}];"
