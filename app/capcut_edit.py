@@ -31,11 +31,37 @@ def _drafts_root(root: str | None = None) -> Path:
     return path
 
 
+SEAL = "clipkit_seal.json"
+
+
+def _digest(text: str) -> str:
+    import hashlib
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+def _seal(folder: Path, text: str) -> None:
+    """Remember what ClipKit last wrote, so an edit made outside ClipKit is caught before ClipKit builds on it."""
+    (folder / SEAL).write_text(json.dumps({"draft_content": _digest(text)}), encoding="utf-8")
+
+
+def accept(folder: str) -> None:
+    """The person changed the project on purpose (in CapCut): ClipKit carries on from that version."""
+    f = Path(folder)
+    _seal(f, (f / "draft_content.json").read_text(encoding="utf-8"))
+
+
 def _load(folder: Path) -> dict[str, Any]:
     content = folder / "draft_content.json"
     if not content.is_file():
         raise VideoEditError(f"not a CapCut draft: {folder}")
-    return json.loads(content.read_text(encoding="utf-8"))
+    text = content.read_text(encoding="utf-8")
+    seal = folder / SEAL
+    if seal.is_file() and json.loads(seal.read_text(encoding="utf-8")).get("draft_content") != _digest(text):
+        raise VideoEditError(
+            f"โปรเจกต์ {folder.name} ถูกแก้นอก ClipKit (CapCut หรือ AI ตัวอื่นแก้ไฟล์ draft_content.json เอง) "
+            "ClipKit จะไม่ทำต่อบนไฟล์นี้ เพราะอาจได้งานเพี้ยน: สร้างโปรเจกต์ใหม่จากไฟล์ดิบ หรือถ้าตั้งใจแก้ใน CapCut เอง "
+            f'สั่ง  python scripts/accept_edit.py "{folder}"  แล้วทำต่อได้')
+    return json.loads(text)
 
 
 def sync_timeline(folder: Path, text: str) -> None:
@@ -67,6 +93,7 @@ def fresh_ids(folder: Path) -> str:
         text = json.dumps(draft, ensure_ascii=False, indent=2)
         content.write_text(text, encoding="utf-8")
         sync_timeline(folder, text)
+        _seal(folder, text)
     return new
 
 
@@ -78,6 +105,7 @@ def _save(folder: Path, draft: dict[str, Any], op: str) -> None:
     text = json.dumps(draft, ensure_ascii=False, indent=2)
     content.write_text(text, encoding="utf-8")
     sync_timeline(folder, text)
+    _seal(folder, text)
     meta_path = folder / "draft_meta_info.json"
     if meta_path.is_file():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
