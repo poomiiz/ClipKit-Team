@@ -665,6 +665,8 @@ def create_capcut_draft(video_path: str, project_name: str,
                     if isinstance(rough, dict):
                         rough["duration"] = int(round(info["duration"] * US))
         meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    import capcut_edit  # here: capcut_edit imports this module
+    capcut_edit.fresh_ids(target)  # own timeline id + the Timelines/<id> copy CapCut 9.x opens
 
     return {
         "draft_path": str(target),

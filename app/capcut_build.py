@@ -97,12 +97,17 @@ def build(path: str) -> tuple[Path, list[str]]:
     """Returns the new project folder and what this machine lacks (shown to the person, never hidden)."""
     if not TEMPLATES.is_file():
         raise VideoEditError("app/capcut_templates.json is missing - run scripts/capcut/make_templates.py")
-    _T.update(json.loads(_machine_paths(TEMPLATES.read_text(encoding="utf-8"))))
+    raw = _machine_paths(TEMPLATES.read_text(encoding="utf-8"))
     warnings: list[str] = []
+    probe = json.loads(raw)
     fonts = {st.get("font", {}).get("path", "") for k in ("white", "orange", "caption", "title")
-             for st in json.loads(_T[k]["mat"]["content"]).get("styles", [])}
+             for st in json.loads(probe[k]["mat"]["content"]).get("styles", [])}
+    kanit = render.DEFAULT_FONT.as_posix()
     for f in sorted(x for x in fonts if x and not Path(x).is_file()):
-        warnings.append(f"font not on this machine, CapCut will show its default font: {Path(f).name}")
+        # a font path that does not exist makes CapCut fail on the text layer: use the Thai font ClipKit ships
+        raw = raw.replace(f, kanit)
+        warnings.append(f"font {Path(f).name} not on this machine: using Kanit (change it in CapCut if you like)")
+    _T.update(json.loads(raw))
     t = render.render_draft(path, "", dry=True)
     st = t["style"] or {}
     src = Path(path)
@@ -115,6 +120,7 @@ def build(path: str) -> tuple[Path, list[str]]:
         meta = json.loads(meta_f.read_text(encoding="utf-8"))
         meta.update(draft_name=dst.name, draft_fold_path=dst.as_posix(), draft_id=_id())
         meta_f.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    capcut_edit.fresh_ids(dst)  # its own timeline id: never the same as the project it was copied from
     draft = capcut_edit._load(dst)
     draft["tracks"] = [x for x in draft["tracks"] if x["type"] != "text"]
 

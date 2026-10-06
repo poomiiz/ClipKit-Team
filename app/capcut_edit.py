@@ -38,12 +38,46 @@ def _load(folder: Path) -> dict[str, Any]:
     return json.loads(content.read_text(encoding="utf-8"))
 
 
+def sync_timeline(folder: Path, text: str) -> None:
+    """CapCut 9.x keeps the open timeline in Timelines/<main_timeline_id>/draft_content.json as well as the
+    project's own draft_content.json; it loads that copy, so every edit is written to both."""
+    proj = folder / "Timelines" / "project.json"
+    if proj.is_file():
+        tid = json.loads(proj.read_text(encoding="utf-8")).get("main_timeline_id")
+        inner = folder / "Timelines" / str(tid)
+        if tid and inner.is_dir():
+            (inner / "draft_content.json").write_text(text, encoding="utf-8")
+
+
+def fresh_ids(folder: Path) -> str:
+    """A cloned project gets its own timeline id (project.json, the Timelines/<id> folder, draft_content id):
+    two projects sharing one id make CapCut open the other project's timeline or hang."""
+    proj = folder / "Timelines" / "project.json"
+    content = folder / "draft_content.json"
+    new = str(uuid.uuid4()).upper()
+    if proj.is_file():
+        old = json.loads(proj.read_text(encoding="utf-8")).get("main_timeline_id")
+        if old:
+            proj.write_text(proj.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+            if (folder / "Timelines" / old).is_dir():
+                (folder / "Timelines" / old).rename(folder / "Timelines" / new)
+    if content.is_file():
+        draft = json.loads(content.read_text(encoding="utf-8"))
+        draft["id"] = new
+        text = json.dumps(draft, ensure_ascii=False, indent=2)
+        content.write_text(text, encoding="utf-8")
+        sync_timeline(folder, text)
+    return new
+
+
 def _save(folder: Path, draft: dict[str, Any], op: str) -> None:
     content = folder / "draft_content.json"
     backup = content.with_suffix(f".json.bak_{op}")
     if not backup.exists():
         shutil.copy2(content, backup)
-    content.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
+    text = json.dumps(draft, ensure_ascii=False, indent=2)
+    content.write_text(text, encoding="utf-8")
+    sync_timeline(folder, text)
     meta_path = folder / "draft_meta_info.json"
     if meta_path.is_file():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))

@@ -78,6 +78,7 @@ class DraftRequest(BaseModel):
     shape: str = Field(default="source", pattern="^(source|portrait|landscape|square)$")
     focus_x: float = Field(default=0.5, ge=0, le=1)  # where to keep in frame when cropping (0 left, 1 right)
     focus_y: float = Field(default=0.5, ge=0, le=1)  # which button made it: finish in ClipKit or in CapCut
+    template: str | None = None  # project template (project_templates/<name>.json) to start from
 
 
 class BriefRequest(BaseModel):
@@ -359,7 +360,105 @@ def capcut(req: DraftRequest) -> dict[str, Any]:
     # which raw file this project came from: the sidebar groups projects under it
     (Path(result["draft_path"]) / "clipkit.json").write_text(
         json.dumps({"raw": req.file, "start": req.start, "end": end, "via": req.via}, ensure_ascii=False), encoding="utf-8")
+    if req.template:
+        apply_template(result["draft_path"], req.template)
     return result
+
+
+# ── project templates: the whole look of a clip, saved once and given to every new project ──
+TEMPLATES_DIR = _APP_DIR.parent / "project_templates"   # this machine's own (git-ignored)
+TEMPLATE_KEYS = ("anim", "preset", "zoomcut", "skin", "music", "music_volume", "sfx", "sfx_volume",
+                 "auto_color", "trim", "hook_colors")
+TEMPLATE_DEFAULT = {"anim": "pair", "preset": "default", "zoomcut": True, "skin": 0.6, "auto_color": True, "trim": True,
+                    "sfx": True, "sfx_volume": 1.0, "music_volume": 0.12, "hook_colors": ["white", "orange"]}
+
+
+def _template(name: str) -> dict[str, Any]:
+    f = TEMPLATES_DIR / f"{name}.json"
+    if not f.is_file():
+        raise HTTPException(400, f"ไม่พบเทมเพลต: {name}")
+    return {**TEMPLATE_DEFAULT, **json.loads(f.read_text(encoding="utf-8"))}
+
+
+def apply_template(path: str, name: str) -> dict[str, Any]:
+    """Put a template's settings into a project (clipkit_style.json); the steps they switch on run in prepare."""
+    t = _template(name)
+    f = Path(path) / "clipkit_style.json"
+    style = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    style.update({k: v for k, v in t.items() if k in TEMPLATE_KEYS})
+    style["template"] = name
+    f.write_text(json.dumps(style, ensure_ascii=False), encoding="utf-8")
+    return style
+
+
+@router.get("/templates")
+def templates() -> dict[str, Any]:
+    names = sorted(p.stem for p in TEMPLATES_DIR.glob("*.json")) if TEMPLATES_DIR.is_dir() else []
+    return {"templates": names}
+
+
+class TemplateSave(BaseModel):
+    path: str
+    name: str = Field(min_length=1, max_length=60, pattern=r"^[^\\/:*?\"<>|]+$")
+
+
+@router.post("/template/save")
+def template_save(req: TemplateSave) -> dict[str, Any]:
+    """This project's look as a template: subtitle look and preset, zoom, skin, colour, music, clicks, title colours."""
+    f = Path(req.path) / "clipkit_style.json"
+    style = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    t = {k: style[k] for k in TEMPLATE_KEYS if k in style}
+    t["auto_color"] = bool(style.get("color"))
+    t["trim"] = style.get("trim", True)
+    placed = Path(req.path) / "clipkit_placed.json"
+    if placed.is_file():  # the music and clicks as reviewed in the editor
+        pl = json.loads(placed.read_text(encoding="utf-8"))
+        if pl.get("music") is not None:
+            t["music"], t["music_volume"] = pl["music"].get("file", ""), pl["music"].get("volume", 0.12)
+        if pl.get("sfx") is not None:
+            t["sfx"], t["sfx_volume"] = pl["sfx"].get("on", True), pl["sfx"].get("volume", 1.0)
+    hook = Path(req.path) / "clipkit_hook.json"
+    if hook.is_file():
+        t["hook_colors"] = [x.get("color", "white") for x in json.loads(hook.read_text(encoding="utf-8"))][:2]
+    TEMPLATES_DIR.mkdir(exist_ok=True)
+    (TEMPLATES_DIR / f"{req.name.strip()}.json").write_text(json.dumps(t, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"template": req.name.strip(), "settings": t}
+
+
+class Prepare(BaseModel):
+    path: str
+    template: str | None = None
+    capcut: bool = True
+
+
+@router.post("/draft/prepare")
+def draft_prepare(req: Prepare) -> dict[str, Any]:
+    """Everything the template switches on, then (capcut) the finished layout as a CapCut project to keep editing:
+    subtitles, breaths cut, colour, then capcut_build. No MP4 preview here (that is the ClipKit route)."""
+    import capcut_build
+    steps = []
+    try:
+        style = apply_template(req.path, req.template) if req.template else {}
+        t = {**TEMPLATE_DEFAULT, **style}
+        if not capcut_edit.read_draft(req.path)["subtitles"]:
+            got = capcut_edit.transcribe_draft(req.path)
+            capcut_edit.set_subtitles(req.path, got["subtitles"])
+            capcut_edit.subtitles_language(req.path, "th")
+            steps.append(f"ถอดเสียงใส่ซับ {got['count']} บรรทัด")
+        if t.get("trim") and not (Path(req.path) / "draft_content.json.bak_trim").exists():
+            capcut_edit.trim_pauses(req.path)
+            steps.append("ตัดช่วงหายใจ")
+        if t.get("auto_color") and not style.get("color"):
+            auto_color(req.path)
+            steps.append("ปรับสีอัตโนมัติ")
+        out = None
+        if req.capcut:
+            out, warnings = capcut_build.build(req.path)
+            steps.append("ทำโปรเจกต์ CapCut แล้ว")
+            steps += warnings
+    except VideoEditError as exc:
+        raise HTTPException(400, "; ".join(steps + [str(exc)])) from exc
+    return {"steps": steps, "capcut": str(out) if out else None}
 
 
 class FocusRequest(BaseModel):
