@@ -233,4 +233,7 @@ def build(path: str) -> tuple[Path, list[str]]:
     mu = t["music"]
     if mu.get("file"):
         capcut_edit.add_music(str(dst), mu["file"], float(mu.get("volume", 0.12)))
+    # the AI version as handed over, so editdata.py can compare it with what the person approves
+    # (approved.json: "ai_version": "clipkit_ai_version.json")
+    shutil.copyfile(dst / "draft_content.json", dst / "clipkit_ai_version.json")
     return dst, warnings

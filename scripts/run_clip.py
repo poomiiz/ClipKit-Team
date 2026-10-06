@@ -33,6 +33,7 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--insert", action="store_true", help="use the clips downloaded into each clipkit_insert folder")
     ap.add_argument("--export", action="store_true", help="render the MP4s")
     ap.add_argument("--capcut", action="store_true", help="also lay the finished clip out as a CapCut project to keep editing")
+    ap.add_argument("--client", help="with --capcut: check the CapCut project against this client's pace (presets/pace/<client>.json)")
     return ap
 
 
@@ -228,6 +229,11 @@ def main() -> int:
                 say(step="ทำโปรเจกต์ CapCut", story=n)
                 cc, row["capcut_warnings"] = capcut_build.build(path)
                 row["capcut"] = str(cc)
+                if a.client:
+                    sys.path.insert(0, str(ROOT / "scripts" / "capcut"))
+                    import pace
+                    row["pace"] = pace.check(cc, a.client)
+                    say(pace=row["pace"]["score"], problems=row["pace"]["problems"], story=n)
             if a.export:
                 say(step="ส่งออก MP4", story=n)
                 row["mp4"] = ve.draft_hf_export(ve.ExportRequest(path=path))["file"]
