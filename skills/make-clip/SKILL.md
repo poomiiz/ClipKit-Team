@@ -90,6 +90,12 @@ result ("ซับยาวไป", "ซับสั้นเกิน", "เร
 with `--fix "<what you changed>"`. Asked to send results back: `clipkit report` (or `python scripts/cutlog.py report`)
 makes a small zip with no video - tell them it contains the clip's spoken words.
 
+**ClipKit itself goes wrong** (an error, CapCut will not open a project, a crash): report it through the log,
+never as a loose file on the Desktop - `python scripts/cutlog.py feedback "<project folder>" "BUG: <what happened,
+exact error text>" --fix "<what you tried>"`. It lands in the team sheet with the version. Do not hand-edit a
+project's draft_content.json / Timelines files or ClipKit's code to work around it: a hand fix hides the bug and
+is lost on the next update. Tell the person it is reported.
+
 ## Subtitle presets (each person makes their own)
 `presets/<name>.json`: how the normal text and the emphasis text look, plus an optional small translated
 caption. Ask the person for a name.
