@@ -75,9 +75,6 @@ def _subtitle_stats(project: Path) -> dict:
     return {"normal_letters": stat(leads), "emphasis_letters": stat(punches), "looks": looks}
 
 
-# where every machine sends its clip checks (numbers and problems only); anyone can append rows, nobody can read
-TEAM_SHEET = "https://script.google.com/macros/s/AKfycbzHoTBG1FmY4ux-XHxPCYCfwP1eK9e-HXDd-1QfC5AfNdUfoPxpcVIKy1QRHhdwzxkU/exec"
-
 # the rules the analysis checks (letters exclude spaces); change them here when the editing rules change
 RULES = {"normal": (4, 18), "emphasis": (2, 16), "emphasis_share": (0.25, 0.7), "title_letters": (3, 20),
          "cuts_per_min": (6, 45), "min_length_s": 40}
@@ -139,8 +136,8 @@ def _sheet(row: dict) -> str:
     import urllib.request
     sys.path.insert(0, str(ROOT / "app"))
     import kit_settings
-    # the team sheet; a machine can point elsewhere with config.json "report_url" ("off" = do not send)
-    url = kit_settings._read_config().get("report_url") or TEAM_SHEET
+    # off unless this machine set config.json "report_url" (python scripts/cutlog.py sheet <url>); "off" = do not send
+    url = kit_settings._read_config().get("report_url", "")
     if url == "off":
         url = ""
     if not url:
@@ -152,12 +149,6 @@ def _sheet(row: dict) -> str:
             return "sheet: sent" if r.status == 200 else f"sheet: HTTP {r.status}"
     except Exception as exc:  # the clip is done either way: say the upload failed, the local log keeps the row
         return f"sheet: NOT sent ({exc})"
-
-
-def _who() -> dict:
-    import getpass
-    import platform
-    return {"person": getpass.getuser(), "machine": platform.node()}
 
 
 def log_run(raw: str, story: dict, n: int, project: str, args: dict, length: float) -> dict:
@@ -179,7 +170,7 @@ def log_run(raw: str, story: dict, n: int, project: str, args: dict, length: flo
     with open(logs_dir() / "runs.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
     sub = row["subtitles"]
-    sheet = _sheet({"type": "clip", **_who(), "time": row["time"], "version": row["version"], "video": row["video"],
+    sheet = _sheet({"type": "clip", "time": row["time"], "version": row["version"], "video": row["video"],
                     "story": n, "title": row["title"], "length_s": length, "preset": row["preset"], "cuts": cuts,
                     "score": row["analysis"]["score"], "problems": "; ".join(row["analysis"]["problems"]),
                     "normal_avg": sub.get("normal_letters", {}).get("avg"),
@@ -194,7 +185,7 @@ def feedback(project: str, said: str, fix: str) -> None:
            "fix": fix, "subtitles": _subtitle_stats(proj), "snapshot": _snapshot(proj, "feedback")}
     with open(logs_dir() / "feedback.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    sheet = _sheet({"type": "feedback", **_who(), "time": row["time"], "version": row["version"], "video": proj.name,
+    sheet = _sheet({"type": "feedback", "time": row["time"], "version": row["version"], "video": proj.name,
                     "feedback": said, "fix": fix,
                     "normal_avg": row["subtitles"].get("normal_letters", {}).get("avg"),
                     "emphasis_avg": row["subtitles"].get("emphasis_letters", {}).get("avg")})
@@ -241,7 +232,7 @@ def main() -> int:
         cfg = json.loads(cfg_f.read_text(encoding="utf-8-sig"))
         cfg["report_url"] = a.url
         cfg_f.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(_sheet({"type": "test", **_who(), "time": time.strftime("%Y-%m-%d %H:%M:%S"), "version": version(),
+        print(_sheet({"type": "test", "time": time.strftime("%Y-%m-%d %H:%M:%S"), "version": version(),
                       "problems": "test row from clipkit sheet"}))
     elif a.cmd == "ping":
         print(_sheet({"type": "machine", **_who(), "time": time.strftime("%Y-%m-%d %H:%M:%S"), "version": version(),

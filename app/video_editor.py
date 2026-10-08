@@ -115,6 +115,7 @@ class DraftStyleRequest(BaseModel):
     y: float | None = None
     color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     stroke: float | None = None
+    line_h: float | None = Field(default=None, ge=0.8, le=2.5)
 
 
 class DraftTrimRequest(BaseModel):
@@ -584,6 +585,36 @@ def draft_subs(req: DraftSubsRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class TidyRequest(BaseModel):
+    path: str
+    mode: str = Field(default="lines", pattern="^(lines|split|shrink)$")
+
+
+@router.get("/draft/text-check")
+def draft_text_check(path: str = Query(...)) -> dict[str, Any]:
+    """What the text settings page shows before an export: the subtitle look and the lines outside the safe zone."""
+    import render
+    try:
+        subs = capcut_edit.read_draft(path)["subtitles"]
+        f = Path(path) / "clipkit_style.json"
+        style = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+        return {"look": subs[0] if subs else None, "count": len(subs), "problems": render.safe_zone(path),
+                "subs": [{k: s[k] for k in ("start", "end", "text")} for s in subs],
+                "box": render.safe_box(style), "zone": style.get("safe_zone") or "general",
+                "zones": {k: z["label"] for k, z in render.SAFE_ZONES.items()},
+                "line_h": float(style.get("line_h", render.LINE_H)), "px_per_size": render.CAPCUT_PX}
+    except VideoEditError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/draft/tidy")
+def draft_tidy(req: TidyRequest) -> dict[str, Any]:
+    try:
+        return capcut_edit.tidy_subtitles(req.path, req.mode)
+    except VideoEditError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/draft/subs/fill")
 def draft_subs_fill(req: FillGapsRequest) -> dict[str, Any]:
     """Subtitle only the stretches that have none, for footage added later."""
@@ -634,7 +665,7 @@ def draft_layout(req: TextLayoutRequest) -> dict[str, Any]:
 def draft_style(req: DraftStyleRequest) -> dict[str, Any]:
     try:
         return capcut_edit.restyle_subtitles(req.path, size=req.size, y=req.y,
-                                             color=req.color, stroke=req.stroke)
+                                             color=req.color, stroke=req.stroke, line_h=req.line_h)
     except VideoEditError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -824,8 +855,9 @@ def _overlays(path: str) -> list[dict[str, Any]]:
 
 def _split2(text: str) -> tuple[str, str]:
     """Two halves at the Thai word break that balances them (lead / punch, key / sub)."""
+    import render
     from pythainlp.tokenize import word_tokenize
-    w = word_tokenize(text.replace("\n", " "), keep_whitespace=True)
+    w = word_tokenize(render.unbreak(text), keep_whitespace=True)
     if len(w) < 2:
         return text, ""
     i = min(range(1, len(w)), key=lambda k: abs(len("".join(w[:k])) - len("".join(w[k:]))))
@@ -1436,4 +1468,6 @@ def draft_hf_export(req: ExportRequest) -> dict[str, Any]:
     shutil.rmtree(tmp, ignore_errors=True)
     if r.returncode != 0 or not target.is_file():
         raise HTTPException(500, "render failed: " + (r.stderr or r.stdout).strip()[-800:])
+    import render
+    render.normalize_loudness(target)
     return {"file": str(target), "seconds": round(_t.time() - t0, 1)}

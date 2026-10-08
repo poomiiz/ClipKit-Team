@@ -7,6 +7,7 @@ Round 1 covers what ClipKit itself makes: the main video track and the main text
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -20,6 +21,46 @@ US = 1_000_000
 CAPCUT_PX = 5.2  # pixels per CapCut font-size unit per 1080 px of the canvas short side (same number the editor preview uses)
 FONTS = Path(__file__).resolve().parents[1] / "fonts"
 DEFAULT_FONT = FONTS / "Kanit-Bold.ttf"  # Google Fonts, OFL: shipped with ClipKit so Thai always shapes
+# TikTok / Reels / Shorts draw their buttons on the right and the caption + sound bar at the bottom:
+# subtitles stay inside this box (fractions of the frame) so the app never covers them
+SAFE_W, SAFE_TOP, SAFE_BOTTOM = 0.78, 0.11, 0.77
+# where each app's own bar, buttons and caption cover a 9:16 video, as fractions of the frame: side margin, top bar,
+# bottom of the free area, and the lower-right button column (width, from y down; drawn in the editor, not enforced).
+# "general" is ClipKit's box for ordinary posts; the app boxes follow each app's ad spec overlay for 1080x1920
+# (adkit.so/tools/safe-zones, 2026-09): stricter, since ads add their own buttons at the bottom.
+SAFE_ZONES = {
+    "general": {"label": "โพสต์ทั่วไป (ทุกแอป)", "side": 0.11, "top": SAFE_TOP, "bottom": SAFE_BOTTOM, "col": None},
+    "tiktok": {"label": "TikTok (ตามคู่มือโฆษณา)", "side": 0.111, "top": 0.125, "bottom": 0.656, "col": [0.389, 0.4375]},
+    "reels": {"label": "Instagram Reels (ตามคู่มือโฆษณา)", "side": 0.06, "top": 0.14, "bottom": 0.65, "col": [0.27, 0.6]},
+    "shorts": {"label": "YouTube Shorts (เทมเพลตทางการ)", "side": 0.178, "top": 0.15, "bottom": 0.65, "col": None},
+    "all": {"label": "ทุกแอปพร้อมกัน (เข้มสุด)", "side": 0.178, "top": 0.15, "bottom": 0.65, "col": [0.389, 0.4375]},
+}
+LINE_H = 1.2  # line height in font sizes; CapCut's line_spacing is this minus 1.18 (its default 0.02 looks like 1.2)
+
+
+def safe_box(style: dict) -> dict:
+    """The safe box picked for this clip (clipkit_style.json safe_zone), with w = the width text may use."""
+    box = SAFE_ZONES.get(style.get("safe_zone") or "general", SAFE_ZONES["general"])
+    return {**box, "w": 1 - 2 * box["side"]}
+LOUDNESS = "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000"  # every export at the level the platforms play (-14 LUFS)
+# a few ms of fade on both sides of every jump cut: a cut mid-waveform clicks
+EDGE_FADE = 0.008
+
+
+def edge_fades(dur: float) -> str:
+    """afade pair for one kept piece of audio (no click where two pieces meet)."""
+    return f"afade=t=in:d={EDGE_FADE},afade=t=out:st={max(0.0, dur - EDGE_FADE):.3f}:d={EDGE_FADE}"
+
+
+def normalize_loudness(mp4: Path) -> None:
+    """Re-level the sound of a finished MP4 in place (picture copied, not re-encoded)."""
+    tmp = mp4.with_name(mp4.stem + ".loud.mp4")
+    r = subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(mp4), "-map", "0:v", "-map", "0:a", "-c:v", "copy",
+                        "-af", LOUDNESS, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(tmp)],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode or not tmp.is_file():
+        raise VideoEditError("loudness pass failed: " + r.stderr.strip()[-400:])
+    tmp.replace(mp4)
 
 
 def _font(path: str | None) -> tuple[str, Path]:
@@ -31,23 +72,123 @@ def _font(path: str | None) -> tuple[str, Path]:
     return TTFont(str(f), fontNumber=0)["name"].getDebugName(1), f
 
 
+# where a Thai line may break: a new thought may start a line, a closing particle never does
+OPENERS = {"แต่", "และ", "ก็", "คือ", "เพราะ", "ซึ่ง", "แล้วก็", "หรือ", "ถ้า", "เลยทำให้", "ดังนั้น", "ส่วน",
+           "ว่า", "ที่", "เพื่อ", "โดย", "จน", "ทำให้"}
+TAILS = {"ครับ", "ค่ะ", "คะ", "นะ", "จ้า", "จ้ะ", "เลย", "ด้วย", "กัน", "ไหม", "มั้ย", "เหรอ", "หรอ", "แหละ", "น่ะ", "ล่ะ",
+         "สิ", "ซะ", "บาท", "คน", "ครั้ง", "เท่า", "เปอร์เซ็นต์", "ล้าน", "แสน", "หมื่น", "พัน", "ร้อย", "ปี", "เดือน", "วัน",
+         "ชั่วโมง", "นาที"}  # particles and units: never the first word of a line
+PREFIXES = {"การ", "ความ", "ผู้", "นัก", "น่า"}  # bind to the next word: never the last word of a line
+
+
+def unbreak(text: str) -> str:
+    """A subtitle on one line again: a break between Thai letters joins them (Thai has no spaces), others become one."""
+    return " ".join(re.sub(r"(?<=[\u0e00-\u0e7f])\s*\n\s*(?=[\u0e00-\u0e7f])", "", text).split())
+
+
+def _key_word(tok: str) -> bool:
+    """A number, an English term or a lesson word: worth starting a line with."""
+    return bool(re.search(r"\d|[A-Za-z]{2,}", tok)) or tok in video_edit._EMPHASIS_WORDS
+
+
+def _best_break(words: list[str], width, max_w: float) -> int:
+    """Index in words (word_tokenize output) to break a line at, 0 if none: among breaks that fit, one where the
+    thought breaks (a space between phrases, punctuation, before a joining or key word), never ending line one on a
+    joining word or prefix (การ/ความ) or starting line two with a particle or unit (ครับ/บาท), never leaving a scrap
+    line under 40% of the other; then the most balanced. The base ranking was checked on 398 wrapped lines from
+    20 real projects."""
+    def rank(i: int) -> tuple:
+        a, b = "".join(words[:i]).strip(), "".join(words[i:]).strip()
+        wa, wb = width(a), width(b)
+        tail = next(w.strip() for w in reversed(words[:i]) if w.strip())
+        head = next(w.strip() for w in words[i:] if w.strip())
+        good = words[i - 1].isspace() or head in OPENERS or _key_word(head) or a[-1:] in ",.!?…"
+        bad = tail in OPENERS or tail in PREFIXES or head in TAILS  # worse than a short line
+        return max(wa, wb) > max_w, bad, min(wa, wb) < 0.4 * max(wa, wb), not good, max(wa, wb)
+    cuts = [i for i in range(1, len(words)) if "".join(words[:i]).strip() and "".join(words[i:]).strip()]
+    return min(cuts, key=rank) if cuts else 0
+
+
+def split_sub(text: str, spoken: list | None, t0: float, t1: float, font_file: Path, px: float, max_w: float,
+              mode: str = "lines") -> list[tuple[float, float, str, list, float]]:
+    """One subtitle that may be too wide -> [(start, end, text, spoken words, size factor)]. It stays as is when it
+    fits one line; else it breaks at the best Thai word break into two lines (mode "lines") or into a new subtitle
+    from that point, timed by the spoken words (when two lines still overflow, or mode "split"). Mode "shrink" keeps
+    one line down to 3/4 size, then breaks like "lines". A piece too short to stand alone (< 0.6 s) stays two
+    lines; the factor shrinks what still overflows."""
+    from PIL import ImageFont
+    from pythainlp.tokenize import word_tokenize
+    font = ImageFont.truetype(str(font_file), 100)
+    width = lambda t: font.getlength(t) * px / 100  # noqa: E731
+    flat = unbreak(text)
+    fit = lambda lines: min(1.0, max_w / max(width(t) for t in lines))  # noqa: E731
+    if "\n" in text.strip() and mode != "split" and fit(text.strip().split("\n")) == 1.0:
+        return [(t0, t1, text.strip(), spoken or [], 1.0)]  # line breaks someone chose, and they fit
+    words = word_tokenize(flat, keep_whitespace=True)
+    if mode == "shrink" and fit([flat]) >= 0.75:
+        return [(t0, t1, flat, spoken or [], fit([flat]))]
+    mode = "lines" if mode == "shrink" else mode  # shrinking more than a quarter is unreadable: break it instead
+    i = 0 if width(flat) <= max_w else _best_break(words, width, max_w)
+    if not i:
+        return [(t0, t1, flat, spoken or [], fit([flat]))]
+    left, right = "".join(words[:i]).strip(), "".join(words[i:]).strip()
+    at = _clock(spoken, t1 - t0)(len("".join(words[:i])) / len(flat))
+    if (mode == "lines" and fit([left, right]) == 1.0) or at < 0.6 or t1 - t0 - at < 0.6:
+        return [(t0, t1, left + "\n" + right, spoken or [], fit([left, right]))]
+    early = [w for w in spoken or [] if w[0] < at]
+    late = [[round(a - at, 2), round(b - at, 2), w] for a, b, w in spoken or [] if a >= at]
+    return (split_sub(left, early, t0, t0 + at, font_file, px, max_w, mode)
+            + split_sub(right, late, t0 + at, t1, font_file, px, max_w, mode))
+
+
+def carry_joiners(rows: list[dict]) -> int:
+    """Subtitles that run straight on (< 0.3 s apart) read as one sentence: a joining word left at the end of one
+    moves to the start of the next, a closing particle at the start of the next moves back. rows: start, end,
+    text, spoken (word times from the row's start); changed in place. Returns how many moved."""
+    from pythainlp.tokenize import word_tokenize
+    moved = 0
+    for a, b in zip(rows, rows[1:]):
+        if b["start"] - a["end"] >= 0.3:
+            continue
+        wa = word_tokenize(unbreak(a["text"]), keep_whitespace=True)
+        wb = word_tokenize(unbreak(b["text"]), keep_whitespace=True)
+        joined, n = wa + wb, len(wa)
+        if sum(1 for w in wa if w.strip()) > 1 and wa[-1].strip() in OPENERS:
+            at = _clock(a["spoken"], a["end"] - a["start"])(len("".join(wa[:-1])) / len("".join(wa)))
+            if at < 0.6:
+                continue
+            t = round(a["start"] + at, 2)  # the joining word and its time go to the next line
+            b["spoken"] = ([[round(x - at, 2), round(y - at, 2), w] for x, y, w in a["spoken"] or [] if x >= at]
+                           + [[round(x + b["start"] - t, 2), round(y + b["start"] - t, 2), w]
+                              for x, y, w in b["spoken"] or []])
+            a["spoken"] = [w for w in a["spoken"] or [] if w[0] < at]
+            a["end"], b["start"], cut = t, t, n - 1
+        elif sum(1 for w in wb if w.strip()) > 1 and wb[0].strip() in TAILS:
+            cut = n + 1  # a particle is said fast: only its text moves back, the times stay
+        else:
+            continue
+        a["text"], b["text"] = "".join(joined[:cut]).strip(), "".join(joined[cut:]).strip()
+        moved += 1
+    return moved
+
+
 def _fit(text: str, font_file: Path, size: float, max_w: float, one: bool = False) -> tuple[list[str], float]:
-    """Keep a subtitle inside the frame: one line when it fits, else two lines split at the Thai word break
-    that balances them best, and only if the longer of the two still overflows, a smaller size."""
+    """Keep a subtitle inside the frame: one line when it fits, else two lines split where the thought breaks
+    (_best_break); only if no break fits, a smaller size."""
     from PIL import ImageFont
     from pythainlp.tokenize import word_tokenize
     font = ImageFont.truetype(str(font_file), 100)
     width = lambda t: font.getlength(t) * size / 100  # noqa: E731
     if one:  # white + colour pair: one line each so the screen never holds more than 2; smaller when long
-        lines = [text.replace("\n", " ")]
+        lines = [unbreak(text)]
     elif "\n" in text:  # the editor already chose the line breaks
         lines = text.split("\n")
     elif width(text) <= max_w:
         return [text], size
     else:
         words = word_tokenize(text, keep_whitespace=True)
-        cuts = [("".join(words[:i]).strip(), "".join(words[i:]).strip()) for i in range(1, len(words))]
-        lines = list(min(cuts, key=lambda c: max(width(c[0]), width(c[1])))) if cuts else [text]
+        i = _best_break(words, width, max_w)
+        lines = ["".join(words[:i]).strip(), "".join(words[i:]).strip()] if i else [text]
     widest = max(width(t) for t in lines)
     return lines, size if widest <= max_w else size * max_w / widest
 
@@ -179,7 +320,7 @@ def _pair(text: str, spoken: list | None, t0: float, t1: float, W: int, H: int, 
     phrases break at breaths / ~16 letters / Thai joining words and the punch is the phrase's last words."""
     from pythainlp.tokenize import word_tokenize
     held = held if held is not None else {"white": ""}  # a "hold" white line carries over into the next subtitle line
-    flat = text.replace("\n", " ")
+    flat = unbreak(text)
     at, total = _clock(spoken, t1 - t0), len(flat) or 1
     phrases = []  # (lead, punch, start, punch time, last word time)
     if picked:
@@ -229,8 +370,12 @@ def _pair(text: str, spoken: list | None, t0: float, t1: float, W: int, H: int, 
     def line(words: str, part: tuple, a: float, b: float, extra: str = "", one: bool = False) -> str:
         size, y, fill, stroke, width = part
         px = size * k
-        lines, px = _fit(words, font_file, px, W * 0.9, one)
-        return (f"Dialogue: 0,{_ts(a)},{_ts(b)},S,,0,0,0,,{{\\an5\\pos({W / 2:.0f},{H / 2 - y * H / 2:.0f})\\fn{fam}"
+        lines, fitted = _fit(words, font_file, px, W * held.get("box", safe_box({}))["w"], one)
+        if fitted < px:  # too long even on two lines: shown smaller, listed for the editor to re-split
+            held.setdefault("shrunk", []).append({"at": round(a, 2), "text": words})
+        px = fitted
+        safe = _safe_y(H / 2 - y * H / 2, len(lines) * px, H, held)
+        return (f"Dialogue: 0,{_ts(a)},{_ts(b)},S,,0,0,0,,{{\\an5\\pos({W / 2:.0f},{safe:.0f})\\fn{fam}"
                 f"\\fs{px:.0f}\\1c{_ass_color(fill)}\\3c{_ass_color(stroke)}\\bord{px * width * 0.6 + 2:.1f}"
                 f"\\shad2{extra}}}" + "\\N".join(lines))
 
@@ -300,6 +445,15 @@ def _karaoke(lines: list[str], spoken: list | None, length: float, base: str, hl
     return [(a, min(b, length), t) for a, b, t in out if min(b, length) - a > 0.005]
 
 
+def _safe_y(cy: float, block: float, H: int, held: dict) -> float:
+    """Centre y of a text block of height ~block moved inside the clip's safe box (held["box"]); counts each move."""
+    half, box = block * 0.6, held.get("box") or safe_box({})
+    safe = min(max(cy, H * box["top"] + half), H * box["bottom"] - half)
+    if safe != cy:
+        held["safe_moved"] = held.get("safe_moved", 0) + 1
+    return safe
+
+
 def _ass_color(rgb: list[float]) -> str:
     r, g, b = (max(0, min(255, round(c * 255))) for c in rgb[:3])
     return f"&H00{b:02X}{g:02X}{r:02X}"
@@ -317,7 +471,30 @@ SFX_RECIPE = {
 }
 
 
+SFX_SUFFIXES = (".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg")
+
+
+def _own_sfx(kind: str) -> Path | None:
+    """This machine's own sound for kind from the sfx folder in Settings: <sfx>/<kind>.<ext>, else the first file in
+    <sfx>/<kind>/. Those files stay on this machine (many downloaded sounds may not be passed on), so none ship."""
+    try:
+        folder = Path(video_edit.kitconfig.need("sfx"))
+    except RuntimeError:
+        return None
+    named = [f for f in sorted(folder.glob(f"{kind}.*")) if f.suffix.lower() in SFX_SUFFIXES]
+    inside = [f for f in sorted((folder / kind).glob("*")) if f.suffix.lower() in SFX_SUFFIXES] if (folder / kind).is_dir() else []
+    return (named or inside or [None])[0]
+
+
+def sfx_len(kind: str) -> float:
+    """Seconds the sound for kind plays, at most 2."""
+    return min(2.0, capcut_edit._music_meta(_sfx(kind))["duration"] + 0.05)  # its 0.1 s rounding never cuts the tail
+
+
 def _sfx(kind: str) -> Path:
+    own = _own_sfx(kind)
+    if own:
+        return own
     f = SFX / f"{kind}.wav"
     if not f.is_file():
         SFX.mkdir(exist_ok=True)
@@ -375,7 +552,7 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
         a = s["source_timerange"]["start"] / US
         b = a + s["source_timerange"]["duration"] / US
         parts.append(f"[0:v]trim={a:.3f}:{b:.3f},setpts=PTS-STARTPTS[v{i}];"
-                     f"[0:a]atrim={a:.3f}:{b:.3f},asetpts=PTS-STARTPTS[a{i}]")
+                     f"[0:a]atrim={a:.3f}:{b:.3f},asetpts=PTS-STARTPTS,{edge_fades(b - a)}[a{i}]")
         labels.append(f"[v{i}][a{i}]")
     graph = ";".join(parts) + ";" + "".join(labels) + f"concat=n={len(segs)}:v=1:a=1[vc][ac];" + \
         f"[vc]scale={vw}:{vh}[vs];color=black:s={W}x{H}:r={info.get("fps") or 30}[bg];[bg][vs]overlay={ox}:{oy}:shortest=1[vo]"
@@ -407,7 +584,8 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
     shown = 0
     estimated = 0  # lines with no word times (typed by hand, or English): highlight paced by letters instead
     hook = _hook(folder)
-    held = {"white": "", "until": HOOK_DUR if hook else 0, "en": _json(folder / "clipkit_caption.json", {})}
+    held = {"white": "", "until": HOOK_DUR if hook else 0, "en": _json(folder / "clipkit_caption.json", {}),
+            "box": safe_box(style)}
     for s in sorted((text or {}).get("segments", []), key=lambda s: s["target_timerange"]["start"]):
         m = index.get(s["material_id"], (None, None))[1]
         if not m:
@@ -437,7 +615,11 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
             shown += 1
             continue
         marks.append(("phrase", round(t0, 2), round(t1, 2), body.get("text", ""), "", body.get("text", ""), 0, ""))
-        lines, size = _fit(body.get("text", ""), fdir, size, W * 0.9)
+        lines, fitted = _fit(body.get("text", ""), fdir, size, W * held["box"]["w"])
+        if fitted < size:
+            held.setdefault("shrunk", []).append({"at": round(t0, 2), "text": body.get("text", "")})
+        size = fitted
+        y = _safe_y(y, len(lines) * size, H, held)
         if anim == "karaoke":
             spoken = said.get(body.get("text", ""))
             estimated += spoken is None
@@ -459,7 +641,7 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
         font_files.add(hfile)
         kk = min(W, H) / 1080 * CAPCUT_PX
         for n, h in enumerate(hook):
-            lines, px = _fit(h["text"], hfile, h["size"] * kk, W * 0.9, True)
+            lines, px = _fit(h["text"], hfile, h["size"] * kk, W * held["box"]["w"], True)
             an = {"up": 2, "down": 8}.get(h["grow"], 5)
             events.append(f"Dialogue: 1,{_ts(h['start'])},{_ts(h['end'])},S,,0,0,0,,{{\\an{an}\\pos({W / 2:.0f},{H / 2 - h['y'] * H / 2 + {2: -4, 8: 4}.get(an, 0):.0f})"
                           f"\\fn{hfam}\\fs{px:.0f}\\1c{_ass_color(h['fill'])}\\3c{_ass_color(h['stroke'])}"
@@ -557,7 +739,7 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
                     "phrases": [{"start": m[1], "end": m[2], "lead": m[3], "punch": m[4], "line": m[5], "k": m[6],
                                  "query": m[7], "opts": m[8] if len(m) > 8 else None} for m in marks if m[0] == "phrase"],
                     "broll": plan, "motions": overlays, "music": {"file": music_file or "", "volume": music_vol},
-                    "sfx": fx, "edited": placed is not None, "source": src, "src_w": info["width"], "src_h": info["height"],
+                    "sfx": fx, "edited": placed is not None, "shrunk": held.get("shrunk", []), "source": src, "src_w": info["width"], "src_h": info["height"],
                     "fit": {"w": vw, "h": vh, "x": ox, "y": oy},
                     "pops": [m[1] for m in marks if m[0] == "pop"],
                     "segments": [{"media_start": s["source_timerange"]["start"] / US, "dur": s["source_timerange"]["duration"] / US,
@@ -577,7 +759,7 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
                 ms = max(0, round(t * 1000))
                 graph += f";[{n}:a]adelay={ms}|{ms},volume={(0.5 if kind == 'pop' else 0.35) * fx['volume']:.3f}[s{k}]"
                 mix.append(f"[s{k}]")
-        graph += f";{''.join(mix)}amix=inputs={len(mix)}:normalize=0:duration=first[aout]"
+        graph += f";{''.join(mix)}amix=inputs={len(mix)}:normalize=0:duration=first,{LOUDNESS}[aout]"
         cmd = [FFMPEG, "-y", "-i", src, *ins, "-filter_complex", graph, "-map", vout, "-map", "[aout]",
                "-c:v", "libx264", "-preset", "ultrafast" if preview else "veryfast", "-crf", "28" if preview else "20",
                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(target)]
@@ -588,5 +770,59 @@ def render_draft(path: str, out_dir: str, preview: bool = False, dry: bool = Fal
             "broll": [it["query"] for it in plan], "broll_items": plan, "music": Path(music_file).name if music_file else None,
             "music_file": music_file or "", "music_volume": music_vol, "sfx_on": fx["on"], "sfx_volume": fx["volume"],
             "sfx": len(sfx) if fx["on"] else 0, "preview": preview,
-            "karaoke_estimated": estimated, "pieces": len(segs), "skipped_tracks": skipped,
+            "karaoke_estimated": estimated, "pieces": len(segs), "safe_zone_moved": held.get("safe_moved", 0),
+            "shrunk": held.get("shrunk", []), "skipped_tracks": skipped,
             "duration": probe(str(target))["duration"]}
+
+
+def text_px(m: dict, s: dict, W: int, H: int) -> tuple[Path, float]:
+    """(font file, size in pixels) of a CapCut text material m shown by segment s on a W x H canvas."""
+    st = (json.loads(m["content"]).get("styles") or [{}])[0]
+    _, fdir = _font((st.get("font") or {}).get("path") or m.get("font_path"))
+    return fdir, (m.get("font_size") or st.get("size") or 15) * CAPCUT_PX * (min(W, H) / 1080) * s["clip"]["scale"]["x"]
+
+
+def safe_zone(path: str) -> list[str]:
+    """Text outside the clip's safe box (safe_box) in a CapCut project or its subtitle preset: '<time> s "<text>":
+    <where>' per line. The MP4 export moves such lines itself (_safe_y); CapCut projects and presets are only reported."""
+    from PIL import ImageFont
+    folder = Path(path)
+    style = _json(folder / "clipkit_style.json", {})
+    box, lh = safe_box(style), float(style.get("line_h", LINE_H))
+    draft = capcut_edit._load(folder)
+    W, H = draft["canvas_config"]["width"], draft["canvas_config"]["height"]
+    index = capcut_edit._index(draft)
+    problems = []
+    for track in draft["tracks"]:
+        if track.get("type") != "text":
+            continue
+        for s in track["segments"]:
+            m = index.get(s["material_id"], (None, None))[1]
+            if not m:
+                continue
+            text = json.loads(m["content"]).get("text", "")
+            fdir, size = text_px(m, s, W, H)
+            lines, size = _fit(text, fdir, size, W * box["w"])
+            font = ImageFont.truetype(str(fdir), max(1, round(size)))
+            half_w = max(font.getlength(t) for t in lines) / 2
+            half_h = size * lh * len(lines) / 2
+            x = W / 2 + s["clip"]["transform"].get("x", 0) * W / 2
+            y = H / 2 - s["clip"]["transform"]["y"] * H / 2
+            where = []
+            if y - half_h < box["top"] * H:
+                where.append("top bar")
+            if y + half_h > box["bottom"] * H:
+                where.append("caption area at the bottom")
+            if abs(x - W / 2) + half_w > box["w"] * W / 2:
+                where.append("button column / frame edge")
+            if where:
+                problems.append(f'{s["target_timerange"]["start"] / US:.1f} s "{text[:30]}": ' + ", ".join(where))
+    if style.get("anim", "none").startswith("pair"):  # the pair look draws lines from the preset, not the draft
+        look = pair_look(style)
+        for role in ("lead", "punch", "caption"):
+            if look[role]:
+                size, y = look[role][0] * CAPCUT_PX * (min(W, H) / 1080), H / 2 - look[role][1] * H / 2
+                if y - size * 0.6 < box["top"] * H or y + size * 0.6 > box["bottom"] * H:
+                    problems.append(f'preset {style.get("preset") or "default"} {role} line (y {look[role][1]}): '
+                                    "under the top bar or the caption area")
+    return problems

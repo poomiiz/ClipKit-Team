@@ -58,8 +58,16 @@ input,select{background:var(--card2);color:var(--txt);border:1px solid var(--lin
 .busy{color:var(--warn);font-size:13px;margin-left:6px}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
 @keyframes s{to{transform:rotate(360deg)}}
+.steps{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 6px;font-size:13px}
+.steps ol{margin:6px 0 0;padding-left:20px;color:var(--sub)}.steps li{margin:3px 0}
+#adv{margin-top:14px;border-top:1px solid var(--line);padding-top:8px}#adv summary{cursor:pointer;font-weight:600;color:var(--sub);padding:4px 0}
 .agent{border:1px dashed var(--acc);border-radius:10px;padding:10px;margin-top:8px}
 .agent code{display:block;background:#080a10;border-radius:8px;padding:8px;margin:6px 0;word-break:break-all;font-size:12.5px}
+.ov{position:absolute;pointer-events:none;z-index:4;background:rgba(5,7,12,.55)}.ov[hidden]{display:none}
+.ov .safe{position:absolute;border:1.5px dashed rgba(255,196,0,.85);border-radius:4px}
+.ov .col{position:absolute;right:0;bottom:0;background:rgba(239,68,68,.22);border-left:1.5px dashed rgba(239,68,68,.8)}
+.ov .otxt{position:absolute;text-align:center;font-weight:700;line-height:1.2;transform:translateY(-50%);font-family:"Kanit","Leelawadee UI",sans-serif;paint-order:stroke fill}
+.opt{display:block;margin:5px 0;cursor:pointer}.prob{color:var(--warn);font-size:12.5px;margin:2px 0}
 @media (max-width:900px){.mid{grid-template-columns:1fr}.player{min-height:300px}}
   body.simple .media { display: none !important; }
 </style>
@@ -73,12 +81,13 @@ input,select{background:var(--card2);color:var(--txt);border:1px solid var(--lin
     <button class="pri" id="bAuto" title="ถอดเสียง ตัดเงียบ ซับ ภาพประกอบ เพลง เอฟเฟกต์ ให้ครบในครั้งเดียว">⚡ ทำให้ครบ</button>
     <button id="bCover">🏷️ ปก</button>
     <button id="bExport" class="pri">🎬 ส่งออก</button>
-    <button id="bCapcut" title="เกลาต่อในแอป CapCut">CapCut</button>
+    <button id="bCapcut" title="เกลาต่อในแอป CapCut">แก้ต่อใน CapCut</button>
     <span class="busy" id="busy"></span>
   </div>
   <div class="mid">
     <div class="player" id="player"><div class="empty" id="empty">กำลังเตรียมตัวเล่น…</div>
-      <hyperframes-player id="v" controls style="display:none;width:100%;height:100%"></hyperframes-player></div>
+      <hyperframes-player id="v" controls style="display:none;width:100%;height:100%"></hyperframes-player>
+      <div class="ov" id="ov" hidden><div class="safe" id="osafe"></div><div class="col" id="ocol"></div><div class="otxt" id="otxt"></div></div></div>
     <div class="side" id="side"></div>
   </div>
   <div class="tl">
@@ -235,17 +244,29 @@ function back() { return '<button onclick="SEL=null;drawTL();side()">‹ ตั�
 function sideClip(s) {
   const st = T.style || {}, c = st.color || {brightness: 0, contrast: 1, saturation: 1, warmth: 0};
   s.innerHTML = `<h3>ตั้งค่าทั้งคลิป</h3>
-    <div class="row"><button id="tsave">💾 บันทึกเป็นเทมเพลต</button><span class="hint">${st.template ? 'ใช้เทมเพลต: ' + esc(st.template) + ' · ' : ''}เก็บหน้าตาคลิปนี้ไว้ใช้กับโปรเจกต์ใหม่</span></div>
+    <div class="steps"><b>ทำคลิปใน 3 ขั้น</b><ol><li>กด <b>⚡ ทำให้ครบ</b> ด้านบน แล้วรอ ระบบตัด ใส่ซับ ใส่หัวคลิปให้เอง</li><li>ดูคลิปทางซ้าย ซับผิดตรงไหน กดข้อความบนแถบล่างแล้วแก้ทางขวา</li><li>กด <b>🎬 ส่งออก</b> ได้ไฟล์วิดีโอพร้อมโพสต์</li></ol></div>
     <h4>หน้าตาซับ</h4><div class="looks">${LOOKS.map(([k, t]) => `<button class="look${T.look === k ? ' on' : ''}" data-k="${k}"><img src="/looks/${k}.jpg"><span>${t}</span></button>`).join('')}</div>
-    <div class="row"><label>พรีเซ็ตข้อความ</label><select id="preset" style="flex:1"></select></div>
-    <div class="hint">สร้างพรีเซ็ตเองได้: บอกในแชท หรือดึงจากโปรเจกต์ CapCut ที่ตัดไว้</div>
-    <div class="row"><label><input type="checkbox" id="zc" ${st.zoomcut ? 'checked' : ''}> ตัดสลับด้วยการซูม</label><span class="hint">ซูมเข้า 8% ตรงจุดตัด</span></div>
     <h4>หัวคลิป (4 วินาทีแรก)</h4>
     ${[0, 1].map(n => `<div class="row"><input id="hk${n}" style="flex:1" placeholder="${n ? 'บรรทัด 2 (ไม่ใส่ก็ได้)' : 'บรรทัด 1 เช่น ธุรกิจสะดุด'}">
       <select id="hc${n}"><option value="white">ขาว</option><option value="orange">ส้ม</option><option value="red">แดง</option></select></div>`).join('')}
     <div class="row"><button class="pri" id="hks">บันทึกหัวคลิป</button><span class="hint">บรรทัดล่างตัวใหญ่กว่า · ลบข้อความทั้งสองบรรทัด = ไม่มีหัวคลิป</span></div>
     <h4>ตัดเนื้อหา</h4>
     <div class="row"><button id="uncut">↶ ย้อนการตัดล่าสุด</button><span class="hint">ตัดประโยคไหนออก: กดที่ข้อความบนไทม์ไลน์ แล้วกด ✂️</span></div>
+    <details id="adv"><summary>ตั้งค่าเพิ่มเติม <span class="hint">ไม่ต้องแตะก็ได้</span></summary>
+    <div class="row"><label>ชุดตัวหนังสือ</label><select id="preset" style="flex:1"></select></div>
+    <div class="hint">สร้างชุดเองได้: บอกในแชท หรือดึงจากโปรเจกต์ CapCut ที่ตัดไว้</div>
+    <h4 id="txtH">ข้อความ (ซับ)</h4>
+    <div class="row"><label>ขนาด</label><input type="range" id="tSize" min="8" max="24" step="0.5"><span id="tSizeV" class="hint"></span></div>
+    <div class="row"><label>ตำแหน่ง</label><input type="range" id="tY" min="-0.6" max="0.6" step="0.01"><span id="tYV" class="hint"></span></div>
+    <div class="row"><label>ระยะบรรทัด</label><input type="range" id="tLh" min="0.9" max="2" step="0.05"><span id="tLhV" class="hint"></span></div>
+    <div class="row"><label>เขตปลอดภัย</label><select id="tZone" style="flex:1"></select></div>
+    <div class="row"><label>สี</label><input type="color" id="tColor"><label style="min-width:0">ขอบ</label><input type="range" id="tStroke" min="0" max="0.2" step="0.01"></div>
+    <div class="row"><label>ซับยาวเกินจอ</label><select id="tMode" style="flex:1">${TIDY.map(([k, t]) => `<option value="${k}"${(st.tidy || 'lines') === k ? ' selected' : ''}>${t}</option>`).join('')}</select><button id="tTidy">จัดตอนนี้</button></div>
+    <div class="hint" id="tModeH"></div>
+    ${T.look === 'pair' ? '<div class="hint">หน้าตาซับ "ข้อความปกติ + เน้น" ใช้ขนาดและตำแหน่งจากพรีเซ็ตใน MP4 · ค่าตรงนี้ใช้กับซับแบบอื่นและโปรเจกต์ CapCut</div>' : ''}
+    <div id="tProb"></div>
+    <div class="row"><label><input type="checkbox" id="zc" ${st.zoomcut ? 'checked' : ''}> ตัดสลับด้วยการซูม</label><span class="hint">ซูมเข้า 8% ตรงจุดตัด</span></div>
+    <div class="row"><button id="tsave">💾 บันทึกเป็นเทมเพลต</button><span class="hint">${st.template ? 'ใช้เทมเพลต: ' + esc(st.template) + ' · ' : ''}เก็บหน้าตาคลิปนี้ไว้ใช้กับโปรเจกต์ใหม่</span></div>
     <h4>สีภาพ</h4>
     ${[['brightness', 'ความสว่าง', -0.3, 0.3, 0.01], ['contrast', 'ความคม', 0.6, 1.6, 0.01], ['saturation', 'ความสด', 0, 2, 0.01], ['warmth', 'อุณหภูมิสี (อุ่น/เย็น)', -0.3, 0.3, 0.01]]
       .map(([k, t, a, b, d]) => `<div class="row"><label>${t}</label><input type="range" data-c="${k}" min="${a}" max="${b}" step="${d}" value="${c[k] ?? (k === 'contrast' || k === 'saturation' ? 1 : 0)}"></div>`).join('')}
@@ -260,11 +281,15 @@ function sideClip(s) {
     <div class="agent"><code>${esc(T.agent_command)}</code><button id="cp">คัดลอกคำสั่ง</button></div>
     <h4 class="media">เสียงเอฟเฟกต์</h4>
     <div class="row media"><label><input type="checkbox" id="fx" ${PL.sfx.on ? 'checked' : ''}> pop ตอนคำเน้น · whoosh ตอนภาพประกอบ</label></div>
-    <div class="row media"><label>ความดัง</label><input type="range" id="fxv" min="0" max="2" step="0.1" value="${PL.sfx.volume}"></div>`;
+    <div class="row media"><label>ความดัง</label><input type="range" id="fxv" min="0" max="2" step="0.1" value="${PL.sfx.volume}"></div>
+    </details>`;
+  try { $('adv').open = localStorage.getItem('ck_adv') === '1'; } catch {}
+  $('adv').ontoggle = () => { try { localStorage.setItem('ck_adv', $('adv').open ? '1' : '0'); } catch {} };
   s.querySelectorAll('.look').forEach(b => b.onclick = async () => { await api('draft/look', {path: PATH, style: {anim: b.dataset.k}}); await reload(); });
   fetch('/api/video/subtitle-presets').then(r => r.json()).then(r => {
     $('preset').innerHTML = r.presets.map(n => `<option${n === (st.preset || 'default') ? ' selected' : ''}>${esc(n)}</option>`).join('');
   });
+  textPanel(st);
   $('preset').onchange = async e => { await api('draft/look', {path: PATH, style: {preset: e.target.value}}); T.style.preset = e.target.value; live(); };
   const hookColor = f => f[2] > 0.9 ? 'white' : f[1] < 0.3 ? 'red' : 'orange';
   (T.hook || []).forEach((h, n) => { $('hk' + n).value = h.text; $('hc' + n).value = hookColor(h.fill); });
@@ -418,11 +443,104 @@ $('bAuto').onclick = () => run($('bAuto'), 'กำลังทำทุกขั
   const r = await api('draft/auto', {path: PATH}); await load(); say('✅ ' + r.steps.filter(Boolean).join(' · ') + ' · แก้บนไทม์ไลน์ได้เลย เห็นผลทันที');
 });
 
+// ── text settings, checked before every export (MP4 or CapCut project) ──
+const TIDY = [['lines', 'ตัดเป็น 2 บรรทัดตามความหมาย', 'แนะนำ · ยาวเกิน 2 บรรทัดจะแยกเป็นซับใหม่ตามจังหวะพูด'],
+  ['split', 'แยกเป็นซับใหม่', 'บรรทัดเดียวเสมอ อ่านเร็ว'], ['shrink', 'ย่อตัวอักษร', 'ย่อได้ถึง 3/4 ถ้ายังยาวจะตัดบรรทัดแทน']];
+const WHERE = {'top bar': 'แถบบนของแอป', 'caption area at the bottom': 'แคปชันด้านล่าง', 'button column / frame edge': 'ปุ่มด้านขวา / ขอบจอ'};
+const probs = c => c.problems.length ? c.problems.map(p => `<div class="prob">⚠️ ${esc(p.replace(/[a-z][a-z /]+[a-z]/g, w => WHERE[w] || w))}</div>`).join('') + '<div class="hint">ใน MP4 ระบบขยับบรรทัดเหล่านี้เข้ากรอบให้เอง แต่ในโปรเจกต์ CapCut จะอยู่ตรงนี้ · เลื่อนตำแหน่งขึ้นหรือลดขนาดได้เลย จอซ้ายเปลี่ยนตาม</div>' : '<div class="hint">✅ ทุกบรรทัดอยู่ในเขตปลอดภัย ไม่โดนปุ่มหรือแคปชันของแอป</div>';
+let TC = null;  // text-check: the subtitle look, the safe box, lines outside it
+const tVal = () => ({size: +$('tSize').value, y: +$('tY').value, line_h: +$('tLh').value, color: $('tColor').value.toLowerCase(), stroke: +$('tStroke').value});
+function fitLines(text, px, maxW) {  // render._fit in the browser: one line, else two balanced at a Thai word break, then smaller
+  const c = fitLines.c || (fitLines.c = document.createElement('canvas').getContext('2d'));
+  c.font = `700 ${px}px Kanit, "Leelawadee UI", sans-serif`;
+  const wd = t => c.measureText(t).width;
+  let lines = text.includes('\n') ? text.split('\n') : [text];
+  if (lines.length === 1 && wd(text) > maxW) {
+    const segs = [...new Intl.Segmenter('th', {granularity: 'word'}).segment(text)].map(x => x.segment);
+    let best = null;
+    for (let i = 1; i < segs.length; i++) {
+      const a = segs.slice(0, i).join('').trim(), b = segs.slice(i).join('').trim(), m = Math.max(wd(a), wd(b));
+      if (a && b && (!best || m < best[0])) best = [m, a, b];
+    }
+    if (best) lines = [best[1], best[2]];
+  }
+  const widest = Math.max(...lines.map(wd));
+  return {lines, px: widest > maxW ? px * maxW / widest : px};
+}
+function overlay(v) {  // what the subtitle will look like, drawn at once over the player while the preview rebuilds
+  if (!TC || !TC.look) return;
+  const p = $('player').getBoundingClientRect(), W = T.width, H = T.height, k = Math.min(p.width / W, p.height / H);
+  const w = W * k, h = H * k, b = TC.box, sw = b.w, st = b.top, sb = b.bottom, px = v.size * TC.px_per_size * Math.min(W, H) / 1080 * k;
+  Object.assign($('ov').style, {left: (p.width - w) / 2 + 'px', top: (p.height - h) / 2 + 'px', width: w + 'px', height: h + 'px'});
+  Object.assign($('osafe').style, {left: (1 - sw) / 2 * w + 'px', width: sw * w + 'px', top: st * h + 'px', height: (sb - st) * h + 'px'});
+  $('ocol').style.display = b.col ? '' : 'none';  // the app's like / comment / share buttons
+  if (b.col) Object.assign($('ocol').style, {width: b.col[0] * w + 'px', top: b.col[1] * h + 'px'});
+  const at = ($('v').currentTime || 0), cur = (TC.subs || []).find(s => s.start <= at && at < s.end) || TC.look;
+  const f = fitLines(cur.text, px, sw * w), half = f.lines.length * f.px * v.line_h / 2;
+  const mid = Math.min(Math.max((1 - v.y) / 2 * h, st * h + half), sb * h - half);  // the MP4 keeps lines inside the box, as render._safe_y
+  Object.assign($('otxt').style, {left: (1 - sw) / 2 * w + 'px', width: sw * w + 'px', top: mid + 'px', fontSize: f.px + 'px', lineHeight: v.line_h,
+    whiteSpace: 'nowrap', color: v.color, webkitTextStroke: (f.px * v.stroke * 2.4 + 1) + 'px #000'});
+  $('otxt').innerHTML = f.lines.map(esc).join('<br>');
+  $('ov').hidden = false;
+}
+async function textPanel(st) {
+  TC = await api('draft/text-check?path=' + encodeURIComponent(PATH));
+  if (!$('tSize')) return;
+  if (!TC.look) { $('tProb').innerHTML = '<div class="hint">ยังไม่มีซับ · กด "ทำให้ครบ" ก่อน</div>'; return; }
+  const l = TC.look, was = {size: l.size || 14, y: l.y ?? -0.44, line_h: TC.line_h, color: (l.color || '#ffffff').toLowerCase(), stroke: l.stroke ?? 0.08};
+  $('tSize').value = was.size; $('tY').value = was.y; $('tLh').value = was.line_h; $('tColor').value = was.color; $('tStroke').value = was.stroke;
+  $('tZone').innerHTML = Object.entries(TC.zones).map(([k, t]) => `<option value="${k}"${k === TC.zone ? ' selected' : ''}>${esc(t)}</option>`).join('');
+  $('tZone').onchange = async () => {
+    await api('draft/look', {path: PATH, style: {safe_zone: $('tZone').value}}); T.style.safe_zone = $('tZone').value;
+    TC = await api('draft/text-check?path=' + encodeURIComponent(PATH)); showProb(TC); overlay(tVal()); await live(); if (!timer) $('ov').hidden = true;
+  };
+  const label = () => { $('tSizeV').textContent = $('tSize').value; $('tLhV').textContent = (+$('tLh').value).toFixed(2) + ' เท่า'; $('tYV').textContent = Math.round((1 - $('tY').value) / 2 * 100) + '% จากบน';
+    $('tModeH').textContent = TIDY.find(t => t[0] === $('tMode').value)[2]; };
+  const showProb = c => { $('tProb').innerHTML = probs(c); };
+  label(); showProb(TC);
+  let timer = null;
+  ['tSize', 'tY', 'tLh', 'tColor', 'tStroke'].forEach(id => {
+    $(id).oninput = () => { label(); overlay(tVal()); clearTimeout(timer); timer = setTimeout(save, 500); };
+  });
+  async function save() {
+    const now = tVal(), style = Object.fromEntries(Object.entries(now).filter(([k, v]) => v !== was[k]));  // only what changed: emphasised lines keep their colour
+    timer = null;
+    if (!Object.keys(style).length) return;
+    try {
+      await api('draft/style', {path: PATH, ...style}); Object.assign(was, style);
+      TC = await api('draft/text-check?path=' + encodeURIComponent(PATH)); showProb(TC);
+      await live();
+      if (!timer) $('ov').hidden = true;  // the rebuilt preview now shows the real thing
+    } catch (e) { $('tProb').innerHTML = '<div class="prob">❌ ' + esc(e.message) + '</div>'; }
+  }
+  $('tMode').onchange = async () => { label(); await api('draft/look', {path: PATH, style: {tidy: $('tMode').value}}); T.style.tidy = $('tMode').value; };
+  $('tTidy').onclick = async () => {
+    try {
+      const r = await api('draft/tidy', {path: PATH, mode: $('tMode').value});
+      say(`จัดซับแล้ว: 2 บรรทัด ${r.two_lines} · แยกใหม่ ${r.split} · ย่อ ${r.shrunk} · ย้ายคำเชื่อม ${r.moved_words}`);
+      await reload(); live();
+    } catch (e) { say('❌ ' + e.message); }
+  };
+}
+// before an export: long lines tidied the chosen way, then a last look at lines outside the safe zone
+async function checkText(label) {
+  const c = await api('draft/text-check?path=' + encodeURIComponent(PATH));
+  if (!c.look) return true;
+  await api('draft/tidy', {path: PATH, mode: (T.style || {}).tidy || 'lines'});
+  const c2 = await api('draft/text-check?path=' + encodeURIComponent(PATH));
+  if (!c2.problems.length || confirm(`ยังมี ${c2.problems.length} บรรทัดโดนปุ่มหรือแคปชันของแอป\n\n${c2.problems.slice(0, 5).map(p => p.replace(/[a-z][a-z /]+[a-z]/g, w => WHERE[w] || w)).join('\n')}\n\nกด OK เพื่อ${label}ต่อ · Cancel เพื่อไปแก้ที่ ตั้งค่าทั้งคลิป > ข้อความ`)) return true;
+  SEL = null; drawTL(); side(); $('adv').open = true; setTimeout(() => $('txtH') && $('txtH').scrollIntoView({behavior: 'smooth'}), 300);
+  return false;
+}
 $('bExport').onclick = () => run($('bExport'), 'กำลังส่งออกตัวจริง…', async () => {
+  if (!await checkText('ส่งออก MP4')) return say('');
   const r = await api('draft/hf-export', {path: PATH}); say('✅ ได้ไฟล์แล้ว (' + r.seconds + ' วิ): ' + esc(r.file));
 });
-$('bCapcut').onclick = () => fetch('/api/kit/draft-open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: PATH})});
-$('bCover').onclick = () => { SEL = null; drawTL(); side(); $('coverH').scrollIntoView({behavior: 'smooth'}); };
+$('bCapcut').onclick = () => run($('bCapcut'), 'กำลังจัดซับก่อนเปิดใน CapCut…', async () => {
+  if (!await checkText('เปิดใน CapCut')) return say('');
+  await fetch('/api/kit/draft-open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: PATH})}); say('');
+});
+$('bCover').onclick = () => { SEL = null; drawTL(); side(); $('adv').open = true; $('coverH').scrollIntoView({behavior: 'smooth'}); };
 document.addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,select,textarea')) return;
   if (e.key === ' ') { e.preventDefault(); const v = $('v'); v.paused ? v.play() : v.pause(); }

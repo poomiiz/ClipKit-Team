@@ -33,6 +33,7 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--insert", action="store_true", help="use the clips downloaded into each clipkit_insert folder")
     ap.add_argument("--export", action="store_true", help="render the MP4s")
     ap.add_argument("--capcut", action="store_true", help="also lay the finished clip out as a CapCut project to keep editing")
+    ap.add_argument("--client", help="with --capcut: check the CapCut project against this client's pace (presets/pace/<client>.json)")
     return ap
 
 
@@ -124,6 +125,7 @@ def make_project(raw: str, n: int, st: dict, shape: str, look: str, preset: str 
     capcut_edit.set_subtitles(path, got["subtitles"])
     capcut_edit.subtitles_language(path, "th")
     capcut_edit.trim_pauses(path)
+    capcut_edit.tidy_subtitles(path)  # long lines: two lines at a Thai break, or a new subtitle
     (Path(path) / "clipkit_style.json").write_text(json.dumps({"anim": look, "preset": preset, "zoomcut": True, "skin": render.SKIN_DEFAULT}), encoding="utf-8")
     ve.auto_color(path)
     return path
@@ -228,6 +230,14 @@ def main() -> int:
                 say(step="ทำโปรเจกต์ CapCut", story=n)
                 cc, row["capcut_warnings"] = capcut_build.build(path)
                 row["capcut"] = str(cc)
+                if a.client:
+                    sys.path.insert(0, str(ROOT / "scripts" / "capcut"))
+                    import pace
+                    row["pace"] = pace.check(cc, a.client)
+                    say(pace=row["pace"]["score"], problems=row["pace"]["problems"], story=n)
+            row["safe_zone"] = render.safe_zone(row.get("capcut") or path)
+            if row["safe_zone"]:
+                say(safe_zone=row["safe_zone"], story=n)
             if a.export:
                 say(step="ส่งออก MP4", story=n)
                 row["mp4"] = ve.draft_hf_export(ve.ExportRequest(path=path))["file"]
@@ -239,7 +249,7 @@ def main() -> int:
     if waits:
         say(WAIT=waits, then=" ".join(sys.argv))
         return 2
-    say(done=str(page(raw, rows)), clips=[{k: r[k] for k in ("n", "title", "length", "path") if k in r} | {"mp4": r.get("mp4"), "capcut": r.get("capcut"), "capcut_warnings": r.get("capcut_warnings"), "check": r.get("check")}
+    say(done=str(page(raw, rows)), clips=[{k: r[k] for k in ("n", "title", "length", "path") if k in r} | {"mp4": r.get("mp4"), "capcut": r.get("capcut"), "capcut_warnings": r.get("capcut_warnings"), "safe_zone": r.get("safe_zone"), "check": r.get("check")}
                                          for r in rows], stories=len(sts), pilot=not a.all)
     return 0
 
