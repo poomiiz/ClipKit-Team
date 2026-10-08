@@ -29,3 +29,7 @@ Underneath: `python scripts/run_clip.py "<video>" --max 120 --capcut` (see the s
 | `prompts/story_split.md` | How stories are picked from a long recording |
 
 Engine updates come from the full ClipKit repo (owner runs its `scripts/sync_team.py`).
+
+## License
+
+MIT, see [LICENSE](LICENSE). How to help: [CONTRIBUTING.md](CONTRIBUTING.md). Security problems: [SECURITY.md](SECURITY.md).
