@@ -210,13 +210,19 @@ def build(path: str) -> tuple[Path, list[str]]:
     fx = t["sfx"]
     clicks = []
     if fx.get("on"):
-        click_file = _T["click"]["mat"]["path"]
+        own = render._own_sfx("pop")  # the pop in this machine's sfx folder wins over CapCut's click
+        click_file = str(own) if own else _T["click"]["mat"]["path"]
         if not Path(click_file).is_file():  # this machine's CapCut never downloaded that click: use ours
             click_file = str(render._sfx("pop"))
+        own_len = _us(render.sfx_len("pop")) if own else 0
         for tp in t["pops"]:
             mat = copy.deepcopy(_T["click"]["mat"])
             mat["path"] = Path(click_file).as_posix()
+            if own:
+                mat["duration"] = own_len
             seg = _clone(draft, _T["click"], mat, "audios")
+            if own:
+                seg["source_timerange"] = {"start": 0, "duration": own_len}
             seg["target_timerange"] = {"start": _us(tp), "duration": seg["source_timerange"]["duration"]}
             seg["volume"] = 0.3 * float(fx.get("volume", 1))
             clicks.append(seg)

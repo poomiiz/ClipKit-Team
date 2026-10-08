@@ -471,7 +471,30 @@ SFX_RECIPE = {
 }
 
 
+SFX_SUFFIXES = (".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg")
+
+
+def _own_sfx(kind: str) -> Path | None:
+    """This machine's own sound for kind from the sfx folder in Settings: <sfx>/<kind>.<ext>, else the first file in
+    <sfx>/<kind>/. Those files stay on this machine (many downloaded sounds may not be passed on), so none ship."""
+    try:
+        folder = Path(video_edit.kitconfig.need("sfx"))
+    except RuntimeError:
+        return None
+    named = [f for f in sorted(folder.glob(f"{kind}.*")) if f.suffix.lower() in SFX_SUFFIXES]
+    inside = [f for f in sorted((folder / kind).glob("*")) if f.suffix.lower() in SFX_SUFFIXES] if (folder / kind).is_dir() else []
+    return (named or inside or [None])[0]
+
+
+def sfx_len(kind: str) -> float:
+    """Seconds the sound for kind plays, at most 2."""
+    return min(2.0, capcut_edit._music_meta(_sfx(kind))["duration"] + 0.05)  # its 0.1 s rounding never cuts the tail
+
+
 def _sfx(kind: str) -> Path:
+    own = _own_sfx(kind)
+    if own:
+        return own
     f = SFX / f"{kind}.wav"
     if not f.is_file():
         SFX.mkdir(exist_ok=True)

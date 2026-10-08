@@ -58,6 +58,9 @@ input,select{background:var(--card2);color:var(--txt);border:1px solid var(--lin
 .busy{color:var(--warn);font-size:13px;margin-left:6px}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
 @keyframes s{to{transform:rotate(360deg)}}
+.steps{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 6px;font-size:13px}
+.steps ol{margin:6px 0 0;padding-left:20px;color:var(--sub)}.steps li{margin:3px 0}
+#adv{margin-top:14px;border-top:1px solid var(--line);padding-top:8px}#adv summary{cursor:pointer;font-weight:600;color:var(--sub);padding:4px 0}
 .agent{border:1px dashed var(--acc);border-radius:10px;padding:10px;margin-top:8px}
 .agent code{display:block;background:#080a10;border-radius:8px;padding:8px;margin:6px 0;word-break:break-all;font-size:12.5px}
 .ov{position:absolute;pointer-events:none;z-index:4;background:rgba(5,7,12,.55)}.ov[hidden]{display:none}
@@ -78,7 +81,7 @@ input,select{background:var(--card2);color:var(--txt);border:1px solid var(--lin
     <button class="pri" id="bAuto" title="ถอดเสียง ตัดเงียบ ซับ ภาพประกอบ เพลง เอฟเฟกต์ ให้ครบในครั้งเดียว">⚡ ทำให้ครบ</button>
     <button id="bCover">🏷️ ปก</button>
     <button id="bExport" class="pri">🎬 ส่งออก</button>
-    <button id="bCapcut" title="เกลาต่อในแอป CapCut">CapCut</button>
+    <button id="bCapcut" title="เกลาต่อในแอป CapCut">แก้ต่อใน CapCut</button>
     <span class="busy" id="busy"></span>
   </div>
   <div class="mid">
@@ -241,10 +244,17 @@ function back() { return '<button onclick="SEL=null;drawTL();side()">‹ ตั�
 function sideClip(s) {
   const st = T.style || {}, c = st.color || {brightness: 0, contrast: 1, saturation: 1, warmth: 0};
   s.innerHTML = `<h3>ตั้งค่าทั้งคลิป</h3>
-    <div class="row"><button id="tsave">💾 บันทึกเป็นเทมเพลต</button><span class="hint">${st.template ? 'ใช้เทมเพลต: ' + esc(st.template) + ' · ' : ''}เก็บหน้าตาคลิปนี้ไว้ใช้กับโปรเจกต์ใหม่</span></div>
+    <div class="steps"><b>ทำคลิปใน 3 ขั้น</b><ol><li>กด <b>⚡ ทำให้ครบ</b> ด้านบน แล้วรอ ระบบตัด ใส่ซับ ใส่หัวคลิปให้เอง</li><li>ดูคลิปทางซ้าย ซับผิดตรงไหน กดข้อความบนแถบล่างแล้วแก้ทางขวา</li><li>กด <b>🎬 ส่งออก</b> ได้ไฟล์วิดีโอพร้อมโพสต์</li></ol></div>
     <h4>หน้าตาซับ</h4><div class="looks">${LOOKS.map(([k, t]) => `<button class="look${T.look === k ? ' on' : ''}" data-k="${k}"><img src="/looks/${k}.jpg"><span>${t}</span></button>`).join('')}</div>
-    <div class="row"><label>พรีเซ็ตข้อความ</label><select id="preset" style="flex:1"></select></div>
-    <div class="hint">สร้างพรีเซ็ตเองได้: บอกในแชท หรือดึงจากโปรเจกต์ CapCut ที่ตัดไว้</div>
+    <h4>หัวคลิป (4 วินาทีแรก)</h4>
+    ${[0, 1].map(n => `<div class="row"><input id="hk${n}" style="flex:1" placeholder="${n ? 'บรรทัด 2 (ไม่ใส่ก็ได้)' : 'บรรทัด 1 เช่น ธุรกิจสะดุด'}">
+      <select id="hc${n}"><option value="white">ขาว</option><option value="orange">ส้ม</option><option value="red">แดง</option></select></div>`).join('')}
+    <div class="row"><button class="pri" id="hks">บันทึกหัวคลิป</button><span class="hint">บรรทัดล่างตัวใหญ่กว่า · ลบข้อความทั้งสองบรรทัด = ไม่มีหัวคลิป</span></div>
+    <h4>ตัดเนื้อหา</h4>
+    <div class="row"><button id="uncut">↶ ย้อนการตัดล่าสุด</button><span class="hint">ตัดประโยคไหนออก: กดที่ข้อความบนไทม์ไลน์ แล้วกด ✂️</span></div>
+    <details id="adv"><summary>ตั้งค่าเพิ่มเติม <span class="hint">ไม่ต้องแตะก็ได้</span></summary>
+    <div class="row"><label>ชุดตัวหนังสือ</label><select id="preset" style="flex:1"></select></div>
+    <div class="hint">สร้างชุดเองได้: บอกในแชท หรือดึงจากโปรเจกต์ CapCut ที่ตัดไว้</div>
     <h4 id="txtH">ข้อความ (ซับ)</h4>
     <div class="row"><label>ขนาด</label><input type="range" id="tSize" min="8" max="24" step="0.5"><span id="tSizeV" class="hint"></span></div>
     <div class="row"><label>ตำแหน่ง</label><input type="range" id="tY" min="-0.6" max="0.6" step="0.01"><span id="tYV" class="hint"></span></div>
@@ -256,12 +266,7 @@ function sideClip(s) {
     ${T.look === 'pair' ? '<div class="hint">หน้าตาซับ "ข้อความปกติ + เน้น" ใช้ขนาดและตำแหน่งจากพรีเซ็ตใน MP4 · ค่าตรงนี้ใช้กับซับแบบอื่นและโปรเจกต์ CapCut</div>' : ''}
     <div id="tProb"></div>
     <div class="row"><label><input type="checkbox" id="zc" ${st.zoomcut ? 'checked' : ''}> ตัดสลับด้วยการซูม</label><span class="hint">ซูมเข้า 8% ตรงจุดตัด</span></div>
-    <h4>หัวคลิป (4 วินาทีแรก)</h4>
-    ${[0, 1].map(n => `<div class="row"><input id="hk${n}" style="flex:1" placeholder="${n ? 'บรรทัด 2 (ไม่ใส่ก็ได้)' : 'บรรทัด 1 เช่น ธุรกิจสะดุด'}">
-      <select id="hc${n}"><option value="white">ขาว</option><option value="orange">ส้ม</option><option value="red">แดง</option></select></div>`).join('')}
-    <div class="row"><button class="pri" id="hks">บันทึกหัวคลิป</button><span class="hint">บรรทัดล่างตัวใหญ่กว่า · ลบข้อความทั้งสองบรรทัด = ไม่มีหัวคลิป</span></div>
-    <h4>ตัดเนื้อหา</h4>
-    <div class="row"><button id="uncut">↶ ย้อนการตัดล่าสุด</button><span class="hint">ตัดประโยคไหนออก: กดที่ข้อความบนไทม์ไลน์ แล้วกด ✂️</span></div>
+    <div class="row"><button id="tsave">💾 บันทึกเป็นเทมเพลต</button><span class="hint">${st.template ? 'ใช้เทมเพลต: ' + esc(st.template) + ' · ' : ''}เก็บหน้าตาคลิปนี้ไว้ใช้กับโปรเจกต์ใหม่</span></div>
     <h4>สีภาพ</h4>
     ${[['brightness', 'ความสว่าง', -0.3, 0.3, 0.01], ['contrast', 'ความคม', 0.6, 1.6, 0.01], ['saturation', 'ความสด', 0, 2, 0.01], ['warmth', 'อุณหภูมิสี (อุ่น/เย็น)', -0.3, 0.3, 0.01]]
       .map(([k, t, a, b, d]) => `<div class="row"><label>${t}</label><input type="range" data-c="${k}" min="${a}" max="${b}" step="${d}" value="${c[k] ?? (k === 'contrast' || k === 'saturation' ? 1 : 0)}"></div>`).join('')}
@@ -276,7 +281,10 @@ function sideClip(s) {
     <div class="agent"><code>${esc(T.agent_command)}</code><button id="cp">คัดลอกคำสั่ง</button></div>
     <h4 class="media">เสียงเอฟเฟกต์</h4>
     <div class="row media"><label><input type="checkbox" id="fx" ${PL.sfx.on ? 'checked' : ''}> pop ตอนคำเน้น · whoosh ตอนภาพประกอบ</label></div>
-    <div class="row media"><label>ความดัง</label><input type="range" id="fxv" min="0" max="2" step="0.1" value="${PL.sfx.volume}"></div>`;
+    <div class="row media"><label>ความดัง</label><input type="range" id="fxv" min="0" max="2" step="0.1" value="${PL.sfx.volume}"></div>
+    </details>`;
+  try { $('adv').open = localStorage.getItem('ck_adv') === '1'; } catch {}
+  $('adv').ontoggle = () => { try { localStorage.setItem('ck_adv', $('adv').open ? '1' : '0'); } catch {} };
   s.querySelectorAll('.look').forEach(b => b.onclick = async () => { await api('draft/look', {path: PATH, style: {anim: b.dataset.k}}); await reload(); });
   fetch('/api/video/subtitle-presets').then(r => r.json()).then(r => {
     $('preset').innerHTML = r.presets.map(n => `<option${n === (st.preset || 'default') ? ' selected' : ''}>${esc(n)}</option>`).join('');
@@ -521,7 +529,7 @@ async function checkText(label) {
   await api('draft/tidy', {path: PATH, mode: (T.style || {}).tidy || 'lines'});
   const c2 = await api('draft/text-check?path=' + encodeURIComponent(PATH));
   if (!c2.problems.length || confirm(`ยังมี ${c2.problems.length} บรรทัดโดนปุ่มหรือแคปชันของแอป\n\n${c2.problems.slice(0, 5).map(p => p.replace(/[a-z][a-z /]+[a-z]/g, w => WHERE[w] || w)).join('\n')}\n\nกด OK เพื่อ${label}ต่อ · Cancel เพื่อไปแก้ที่ ตั้งค่าทั้งคลิป > ข้อความ`)) return true;
-  SEL = null; drawTL(); side(); setTimeout(() => $('txtH') && $('txtH').scrollIntoView({behavior: 'smooth'}), 300);
+  SEL = null; drawTL(); side(); $('adv').open = true; setTimeout(() => $('txtH') && $('txtH').scrollIntoView({behavior: 'smooth'}), 300);
   return false;
 }
 $('bExport').onclick = () => run($('bExport'), 'กำลังส่งออกตัวจริง…', async () => {
@@ -532,7 +540,7 @@ $('bCapcut').onclick = () => run($('bCapcut'), 'กำลังจัดซั�
   if (!await checkText('เปิดใน CapCut')) return say('');
   await fetch('/api/kit/draft-open', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: PATH})}); say('');
 });
-$('bCover').onclick = () => { SEL = null; drawTL(); side(); $('coverH').scrollIntoView({behavior: 'smooth'}); };
+$('bCover').onclick = () => { SEL = null; drawTL(); side(); $('adv').open = true; $('coverH').scrollIntoView({behavior: 'smooth'}); };
 document.addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,select,textarea')) return;
   if (e.key === ' ') { e.preventDefault(); const v = $('v'); v.paused ? v.play() : v.pause(); }

@@ -16,9 +16,13 @@ if (-not $up) {
         try { $up = (Invoke-WebRequest -UseBasicParsing $url -TimeoutSec 2).StatusCode -eq 200 } catch {}
     }
 }
-# open as its own app window (no address bar or tabs) so it feels like a program, not a web page
-$chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
-            "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
-            "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-if ($chrome) { Start-Process $chrome -ArgumentList "--app=$url", "--window-size=1320,860" }
-else { Start-Process $url }
+# open as its own app window (no address bar or tabs) so it feels like a program, not a web page;
+# Chrome first, else Edge (every Windows 10/11 has it), else a normal browser tab
+$win = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+         "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+         "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
+         "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+         "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+$opened = $false
+if ($win) { try { Start-Process $win -ArgumentList "--app=$url", "--window-size=1320,860" -ErrorAction Stop; $opened = $true } catch {} }
+if (-not $opened) { Start-Process $url }

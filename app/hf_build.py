@@ -181,13 +181,14 @@ def build(path: str) -> Path:
                    f'data-media-start="0" data-track-index="4" data-volume="{mu["volume"]}"></audio>')
     fx = t["sfx"]
     if fx.get("on"):
+        pop_s, whoosh_s = render.sfx_len("pop"), render.sfx_len("whoosh")
         for tp in t["pops"]:
-            els.append(f'<audio id="{nid("s")}" src="{_local(out, render._sfx("pop"))}" data-start="{tp:.3f}" data-duration="0.2" '
+            els.append(f'<audio id="{nid("s")}" src="{_local(out, render._sfx("pop"))}" data-start="{tp:.3f}" data-duration="{pop_s:.2f}" '
                        f'data-track-index="5" data-volume="{0.5 * fx["volume"]:.2f}"></audio>')
         for b in t["broll"]:
             if b.get("file"):
                 els.append(f'<audio id="{nid("s")}" src="{_local(out, render._sfx("whoosh"))}" data-start="{max(0, b["start"] - 0.15):.3f}" '
-                           f'data-duration="0.5" data-track-index="5" data-volume="{0.35 * fx["volume"]:.2f}"></audio>')
+                           f'data-duration="{whoosh_s:.2f}" data-track-index="5" data-volume="{0.35 * fx["volume"]:.2f}"></audio>')
     font = _local(out, render.DEFAULT_FONT)
     # the HyperFrames runtime (clip windows, media sync, seeking) for the live player; the renderer brings its own
     runtime = _local(out, str(Path(__file__).with_name("hyperframe.runtime.iife.js")))
