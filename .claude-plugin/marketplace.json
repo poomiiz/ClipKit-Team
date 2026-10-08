@@ -7,7 +7,8 @@
     {
       "name": "clip-kit",
       "source": "./",
-      "description": "ClipKit Team: one command from a talking-head video to short clips with Thai subtitles in your own preset, title, b-roll, music, MP4 and CapCut project."
+      "description": "ClipKit Team: one command from a talking-head video to short clips with Thai subtitles in your own preset, title, b-roll, music, MP4 and CapCut project.",
+      "license": "MIT"
     }
   ],
   "description": "MoonRacle team video editing kit for Claude Code and Codex."

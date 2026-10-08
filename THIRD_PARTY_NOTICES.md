@@ -14,3 +14,7 @@
 ## Kanit (Cadson Demak) — SIL Open Font License 1.1
 
 - `fonts/Kanit-Bold.ttf`, licence text in `fonts/OFL-Kanit.txt`.
+
+## Built-in sound effects
+
+- `sfx_builtin/pop.wav` and `sfx_builtin/whoosh.wav` are synthesised by ClipKit itself with ffmpeg (see `app/render.py`); they are part of this repository under the MIT licence, with no third-party source.
