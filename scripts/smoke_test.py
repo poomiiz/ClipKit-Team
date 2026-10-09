@@ -98,7 +98,7 @@ def pictures_are_stills():
 def name_check_works():
     import sync_team
     assert sync_team.names_in("style from Nina 07".encode()), "a client name was not found"
-    assert not sync_team.names_in('icon "ClipKit Nina.lnk"'.encode()), "the allowed icon name was flagged"
+    assert not sync_team.names_in("github.com/poomiiz/ClipKit".encode()), "the allowed repo link was flagged"
 
 
 for name, fn in list(globals().items()):
