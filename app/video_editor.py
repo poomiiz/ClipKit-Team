@@ -749,11 +749,10 @@ def draft_animation_clear(req: AnimationClearRequest) -> dict[str, Any]:
 def file(path: str = Query(...)) -> FileResponse:
     """Serve one music file so it can be auditioned in the page."""
     from pathlib import Path as _Path
-    target = _Path(path)
+    target = _Path(path).resolve()
     if not target.is_file() or target.suffix.lower() not in capcut_edit.AUDIO_SUFFIXES:
         raise HTTPException(status_code=400, detail=f"not an audio file: {path}")
-    known = any(str(target).lower().startswith(str(_Path(d)).lower())
-                for d in capcut_edit.music_dirs())
+    known = any(target.is_relative_to(_Path(d).resolve()) for d in capcut_edit.music_dirs())
     if not known:
         raise HTTPException(status_code=403, detail="file is outside the music folders")
     return FileResponse(str(target))

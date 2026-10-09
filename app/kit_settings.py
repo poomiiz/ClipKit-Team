@@ -717,10 +717,12 @@ def draft_rename(body: DraftPath) -> dict[str, str]:
     import re
     import shutil
     kind, p = _project(body.path)
-    new = re.sub(r'[\/:*?"<>|]+', " ", body.name).strip()
-    if not new:
+    new = re.sub(r'[\\/:*?"<>|]+', " ", body.name).strip()
+    if not new or new in (".", ".."):
         raise HTTPException(400, "ชื่อว่าง")
     target = p.parent / new
+    if target.resolve().parent != p.parent.resolve():
+        raise HTTPException(400, "ชื่อโปรเจกต์ใช้ไม่ได้")
     if target.exists():
         raise HTTPException(409, f"มีโปรเจกต์ชื่อ {new} อยู่แล้ว")
     if kind == "capcut":
