@@ -1,4 +1,4 @@
-# Runs every 12 hours (Windows Task Scheduler, task "ClipKit Nina update"): takes the newest ClipKit Team
+# Runs every 12 hours (Windows Task Scheduler, task "ClipKit update"): takes the newest ClipKit Team
 # from GitHub and installs new packages. Local edits in the way or no internet: skip, try again next time.
 $root = Split-Path $PSScriptRoot -Parent
 $log = Join-Path $root "update.log"
